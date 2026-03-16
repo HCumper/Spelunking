@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Spelunk", "Spelunk\Spelunk.fsproj", "{AB3BD19B-C19A-476C-BD0A-F473A8E7AEAF}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Spelunking", "Spelunking\Spelunking.fsproj", "{AB3BD19B-C19A-476C-BD0A-F473A8E7AEAF}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
