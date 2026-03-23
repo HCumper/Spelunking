@@ -1,7 +1,10 @@
 module Spelunk.Domain
 // pure Domain module with tiles, actors, commands, and update functions.
 
-type Point = { X: int; Y: int }
+open Spelunk.Config
+open Spelunk.Dungeon
+
+type Position = { X: int; Y: int }
 
 type Tile =
     | Wall
@@ -11,7 +14,7 @@ type Tile =
 type Actor =
     { Id: int
       Name: string
-      Position: Point
+      Position: Position
       Hp: int
       MaxHp: int
       Glyph: char }
@@ -153,31 +156,104 @@ let update command state =
 
     runMonsterTurn afterPlayer
 
+let private roomCenter (room: Room) =
+    { X = room.Left + room.Width / 2
+      Y = room.Top + room.Height / 2 }
+
+let private pointInRoom (room: Room) point =
+    point.X >= room.Left
+    && point.X < room.Left + room.Width
+    && point.Y >= room.Top
+    && point.Y < room.Top + room.Height
+
+let private fallbackFloorPoint (layout: Layout) =
+    seq {
+        for y in 0 .. layout.Height - 1 do
+            for x in 0 .. layout.Width - 1 do
+                if layout.Floors[y, x] then
+                    yield { X = x; Y = y }
+    }
+    |> Seq.tryHead
+    |> Option.defaultValue { X = 1; Y = 1 }
+
+let private debugPrintMap map player monsters =
+    let glyphAt point =
+        if player.Position = point then
+            player.Glyph
+        else
+            monsters
+            |> List.tryFind (fun monster -> monster.Position = point)
+            |> Option.map (fun monster -> monster.Glyph)
+            |> Option.defaultValue (
+                match map.Tiles[point.Y, point.X] with
+                | Wall -> '#'
+                | Floor -> '.'
+                | StairsDown -> '>' )
+
+    printfn "Generated map:"
+
+    for y in 0 .. map.Height - 1 do
+        let row =
+            [ for x in 0 .. map.Width - 1 do
+                  glyphAt { X = x; Y = y } ]
+            |> Array.ofList
+            |> System.String
+
+        printfn "%s" row
+
+let private createDungeon () =
+    let layout: Layout = generate (dungeonConfig ())
+    let tiles = Array2D.create layout.Height layout.Width Wall
+
+    for y in 0 .. layout.Height - 1 do
+        for x in 0 .. layout.Width - 1 do
+            if layout.Floors[y, x] then
+                tiles[y, x] <- Floor
+
+    let stairPoint =
+        layout.Rooms
+        |> List.tryLast
+        |> Option.map roomCenter
+        |> Option.defaultValue (fallbackFloorPoint layout)
+
+    tiles[stairPoint.Y, stairPoint.X] <- StairsDown
+
+    { Width = layout.Width
+      Height = layout.Height
+      Tiles = tiles },
+    layout.Rooms
+
 let createMap () =
-    let width = 40
-    let height = 20
-    let tiles = Array2D.create height width Wall
-
-    for y in 1 .. height - 2 do
-        for x in 1 .. width - 2 do
-            tiles[y, x] <- Floor
-
-    for x in 10 .. 28 do
-        tiles[8, x] <- Wall
-
-    tiles[8, 18] <- Floor
-    tiles[height - 3, width - 3] <- StairsDown
-
-    { Width = width
-      Height = height
-      Tiles = tiles }
+    createDungeon () |> fst
 
 let initialState () =
-    let map = createMap ()
+    let map, rooms = createDungeon ()
+    let spawnPoint =
+        rooms
+        |> List.tryHead
+        |> Option.map roomCenter
+        |> Option.defaultValue { X = 1; Y = 1 }
+
+    let monsterSpawns =
+        rooms
+        |> List.skip 1
+        |> List.filter (fun room -> not (pointInRoom room spawnPoint))
+        |> List.map roomCenter
+
+    let crawlerSpawn =
+        monsterSpawns
+        |> List.tryHead
+        |> Option.defaultValue spawnPoint
+
+    let sentrySpawn =
+        monsterSpawns
+        |> List.tryItem 1
+        |> Option.defaultValue spawnPoint
+
     let player =
         { Id = 0
           Name = "scavenger"
-          Position = { X = 2; Y = 2 }
+          Position = spawnPoint
           Hp = 10
           MaxHp = 10
           Glyph = '@' }
@@ -185,16 +261,18 @@ let initialState () =
     let monsters =
         [ { Id = 1
             Name = "crawler"
-            Position = { X = 12; Y = 4 }
+            Position = crawlerSpawn
             Hp = 3
             MaxHp = 3
             Glyph = 'c' }
           { Id = 2
             Name = "sentry"
-            Position = { X = 26; Y = 14 }
+            Position = sentrySpawn
             Hp = 4
             MaxHp = 4
             Glyph = 's' } ]
+
+    debugPrintMap map player monsters
 
     { Depth = 1
       Map = map

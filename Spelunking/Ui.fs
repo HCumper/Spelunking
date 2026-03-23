@@ -9,6 +9,9 @@ open Spelunk.Domain
 let private statsRows = 2
 let private gapRows = 1
 let private logRows = 6
+let private viewportWidth = 40
+let private viewportHeight = 20
+let private cameraMargin = 8
 let private mapTop = statsRows + gapRows
 let private logTop mapHeight = mapTop + mapHeight + gapRows
 let private totalHeight mapHeight = mapHeight + statsRows + gapRows + logRows
@@ -45,14 +48,44 @@ let private panelLayout width mapHeight style lineCount =
         let contentHeight = max 4 (lineCount + 3)
         6, 3, boxWidth, contentHeight
 
+let private clampCameraAxis current focus viewportSize worldSize =
+    let minFocus = current + cameraMargin
+    let maxFocus = current + viewportSize - cameraMargin - 1
+    let maxCamera = max 0 (worldSize - viewportSize)
+
+    let next =
+        if focus < minFocus then
+            focus - cameraMargin
+        elif focus > maxFocus then
+            focus - viewportSize + cameraMargin + 1
+        else
+            current
+
+    max 0 (min maxCamera next)
+
+let private adjustCamera camera focus mapWidth mapHeight =
+    { X = clampCameraAxis camera.X focus.X viewportWidth mapWidth
+      Y = clampCameraAxis camera.Y focus.Y viewportHeight mapHeight }
+
+let private toScreenPosition camera worldPosition =
+    { X = worldPosition.X - camera.X
+      Y = worldPosition.Y - camera.Y }
+
+let private isVisible worldPosition camera =
+    worldPosition.X >= camera.X
+    && worldPosition.X < camera.X + viewportWidth
+    && worldPosition.Y >= camera.Y
+    && worldPosition.Y < camera.Y + viewportHeight
+
 type RootScreen() as this =
     inherit ScreenObject()
 
     let mutable session = initialSession ()
+    let mutable camera = { X = 0; Y = 0 }
     let bindings = defaultBindings
     let state = session.State
-    let width = state.Map.Width
-    let mapHeight = state.Map.Height
+    let width = viewportWidth
+    let mapHeight = viewportHeight
     let statsSurface = new ScreenSurface(width, statsRows)
     let mapSurface = new ScreenSurface(width, mapHeight)
     let logSurface = new ScreenSurface(width, logRows)
@@ -102,13 +135,16 @@ type RootScreen() as this =
 
             match overlay.Cursor with
             | Some cursor ->
-                paintCell
-                    overlaySurface
-                    cursor.Position.X
-                    cursor.Position.Y
-                    (overlayCursorGlyph cursor.Style)
-                    (overlayColor cursor.Foreground)
-                    (overlayColor cursor.Background)
+                if isVisible cursor.Position camera then
+                    let screenPosition = toScreenPosition camera cursor.Position
+
+                    paintCell
+                        overlaySurface
+                        screenPosition.X
+                        screenPosition.Y
+                        (overlayCursorGlyph cursor.Style)
+                        (overlayColor cursor.Foreground)
+                        (overlayColor cursor.Background)
             | None -> ()
 
             match overlay.Panel with
@@ -125,23 +161,37 @@ type RootScreen() as this =
         overlaySurface.IsDirty <- true
 
     let redraw () =
+        let cameraFocus =
+            match session.Modal with
+            | LookMode cursor
+            | TargetMode cursor -> cursor
+            | _ -> session.State.Player.Position
+
+        camera <- adjustCamera camera cameraFocus session.State.Map.Width session.State.Map.Height
+
         clearSurface statsSurface
         clearSurface mapSurface
         clearSurface logSurface
 
         writeText statsSurface 0 0 Color.White (sprintf "Depth %d" session.State.Depth)
         writeText statsSurface 12 0 Color.White (sprintf "HP %d/%d" session.State.Player.Hp session.State.Player.MaxHp)
-        writeText statsSurface 0 1 Color.LightGray "SadConsole surfaces are mutable. Domain state is not."
+        writeText statsSurface 0 1 Color.LightGray (sprintf "View %d,%d" camera.X camera.Y)
 
-        for y in 0 .. session.State.Map.Height - 1 do
-            for x in 0 .. session.State.Map.Width - 1 do
-                let tile = session.State.Map.Tiles[y, x]
-                paintCell mapSurface x y (tileGlyph tile) (tileForeground tile) Color.Black
+        for screenY in 0 .. mapHeight - 1 do
+            for screenX in 0 .. width - 1 do
+                let worldX = camera.X + screenX
+                let worldY = camera.Y + screenY
+                let tile = session.State.Map.Tiles[worldY, worldX]
+                paintCell mapSurface screenX screenY (tileGlyph tile) (tileForeground tile) Color.Black
 
         for monster in session.State.Monsters do
-            paintCell mapSurface monster.Position.X monster.Position.Y monster.Glyph Color.IndianRed Color.Black
+            if isVisible monster.Position camera then
+                let screenPosition = toScreenPosition camera monster.Position
+                paintCell mapSurface screenPosition.X screenPosition.Y monster.Glyph Color.IndianRed Color.Black
 
-        paintCell mapSurface session.State.Player.Position.X session.State.Player.Position.Y session.State.Player.Glyph Color.Cyan Color.Black
+        if isVisible session.State.Player.Position camera then
+            let screenPosition = toScreenPosition camera session.State.Player.Position
+            paintCell mapSurface screenPosition.X screenPosition.Y session.State.Player.Glyph Color.Cyan Color.Black
 
         session.State.Messages
         |> List.truncate logRows

@@ -4,8 +4,8 @@ open Spelunk.Domain
 
 type Modal =
     | NoModal
-    | LookMode of cursor: Point
-    | TargetMode of cursor: Point
+    | LookMode of cursor: Position
+    | TargetMode of cursor: Position
     | InventoryMode
 
 type Session =
@@ -26,7 +26,7 @@ type OverlayPanelStyle =
     | CenterDialog
 
 type OverlayCursor =
-    { Position: Point
+    { Position: Position
       Style: OverlayCursorStyle
       Foreground: OverlayColor
       Background: OverlayColor }
