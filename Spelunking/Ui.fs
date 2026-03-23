@@ -28,6 +28,12 @@ let private tileForeground tile =
     | Floor -> Color.DarkSlateGray
     | StairsDown -> Color.Gold
 
+let private exploredTileForeground tile =
+    match tile with
+    | Wall -> Color.DarkGray
+    | Floor -> Color.DimGray
+    | StairsDown -> Color.DarkGoldenrod
+
 let private overlayColor color =
     match color with
     | OverlayColor.Default -> Color.White
@@ -77,61 +83,100 @@ let private isVisible worldPosition camera =
     && worldPosition.Y >= camera.Y
     && worldPosition.Y < camera.Y + viewportHeight
 
-type RootScreen() as this =
-    inherit ScreenObject()
+let private paintCell (surface: ScreenSurface) x y glyph foreground background =
+    surface.SetGlyph(x, y, int glyph)
+    surface.SetForeground(x, y, foreground)
+    surface.SetBackground(x, y, background)
 
-    let mutable session = initialSession ()
-    let mutable camera = { X = 0; Y = 0 }
-    let bindings = defaultBindings
-    let state = session.State
-    let width = viewportWidth
-    let mapHeight = viewportHeight
-    let statsSurface = new ScreenSurface(width, statsRows)
-    let mapSurface = new ScreenSurface(width, mapHeight)
-    let logSurface = new ScreenSurface(width, logRows)
-    let overlaySurface = new ScreenSurface(width, mapHeight)
+let private clearSurface (surface: ScreenSurface) =
+    for y in 0 .. surface.Surface.Height - 1 do
+        for x in 0 .. surface.Surface.Width - 1 do
+            paintCell surface x y ' ' Color.White Color.Black
 
-    let configureSurface (surface: ScreenSurface) x y =
-        surface.Position <- Point(x, y)
-        this.Children.Add(surface) |> ignore
+let private writeText (surface: ScreenSurface) x y foreground text =
+    text
+    |> Seq.truncate (max 0 (surface.Surface.Width - x))
+    |> Seq.iteri (fun i ch -> paintCell surface (x + i) y ch foreground Color.Black)
 
-    let paintCell (surface: ScreenSurface) x y glyph foreground background =
-        surface.SetGlyph(x, y, int glyph)
-        surface.SetForeground(x, y, foreground)
-        surface.SetBackground(x, y, background)
+let private drawFrame (surface: ScreenSurface) left top frameWidth frameHeight =
+    for x in left .. left + frameWidth - 1 do
+        paintCell surface x top '-' Color.White Color.Black
+        paintCell surface x (top + frameHeight - 1) '-' Color.White Color.Black
 
-    let clearSurface (surface: ScreenSurface) =
-        for y in 0 .. surface.Surface.Height - 1 do
-            for x in 0 .. surface.Surface.Width - 1 do
-                paintCell surface x y ' ' Color.White Color.Black
+    for y in top .. top + frameHeight - 1 do
+        paintCell surface left y '|' Color.White Color.Black
+        paintCell surface (left + frameWidth - 1) y '|' Color.White Color.Black
 
-    let writeText (surface: ScreenSurface) x y foreground text =
-        text
-        |> Seq.truncate (max 0 (surface.Surface.Width - x))
-        |> Seq.iteri (fun i ch -> paintCell surface (x + i) y ch foreground Color.Black)
+    paintCell surface left top '+' Color.White Color.Black
+    paintCell surface (left + frameWidth - 1) top '+' Color.White Color.Black
+    paintCell surface left (top + frameHeight - 1) '+' Color.White Color.Black
+    paintCell surface (left + frameWidth - 1) (top + frameHeight - 1) '+' Color.White Color.Black
 
-    let drawFrame (surface: ScreenSurface) left top frameWidth frameHeight =
-        for x in left .. left + frameWidth - 1 do
-            paintCell surface x top '-' Color.White Color.Black
-            paintCell surface x (top + frameHeight - 1) '-' Color.White Color.Black
+type StatsPanel() =
+    inherit ScreenSurface(viewportWidth, statsRows)
 
-        for y in top .. top + frameHeight - 1 do
-            paintCell surface left y '|' Color.White Color.Black
-            paintCell surface (left + frameWidth - 1) y '|' Color.White Color.Black
+    member this.Render(session, camera) =
+        clearSurface this
+        writeText this 0 0 Color.White (sprintf "Depth %d" session.State.Depth)
+        writeText this 12 0 Color.White (sprintf "HP %d/%d" session.State.Player.Hp session.State.Player.MaxHp)
+        writeText this 0 1 Color.LightGray (sprintf "View %d,%d" camera.X camera.Y)
+        this.IsDirty <- true
 
-        paintCell surface left top '+' Color.White Color.Black
-        paintCell surface (left + frameWidth - 1) top '+' Color.White Color.Black
-        paintCell surface left (top + frameHeight - 1) '+' Color.White Color.Black
-        paintCell surface (left + frameWidth - 1) (top + frameHeight - 1) '+' Color.White Color.Black
+type CavernPanel() =
+    inherit ScreenSurface(viewportWidth, viewportHeight)
 
-    let drawOverlay () =
-        clearSurface overlaySurface
+    member this.Render(session, camera) =
+        clearSurface this
+
+        for screenY in 0 .. viewportHeight - 1 do
+            for screenX in 0 .. viewportWidth - 1 do
+                let worldX = camera.X + screenX
+                let worldY = camera.Y + screenY
+                let tile = session.State.Map.Tiles[worldY, worldX]
+
+                if session.State.VisibleTiles[worldY, worldX] then
+                    paintCell this screenX screenY (tileGlyph tile) (tileForeground tile) Color.Black
+                elif session.State.ExploredTiles[worldY, worldX] then
+                    paintCell this screenX screenY (tileGlyph tile) (exploredTileForeground tile) Color.Black
+
+        for monster in session.State.Monsters do
+            if isVisible monster.Position camera && session.State.VisibleTiles[monster.Position.Y, monster.Position.X] then
+                let screenPosition = toScreenPosition camera monster.Position
+                paintCell this screenPosition.X screenPosition.Y monster.Glyph Color.IndianRed Color.Black
+
+        if isVisible session.State.Player.Position camera then
+            let screenPosition = toScreenPosition camera session.State.Player.Position
+            paintCell this screenPosition.X screenPosition.Y session.State.Player.Glyph Color.Cyan Color.Black
+
+        this.IsDirty <- true
+
+type MessagesPanel() =
+    inherit ScreenSurface(viewportWidth, logRows)
+
+    member this.Render(session) =
+        clearSurface this
+
+        session.State.Messages
+        |> List.truncate logRows
+        |> List.rev
+        |> List.iteri (fun i message -> writeText this 0 i Color.LightGray message)
+
+        if session.State.Player.Hp <= 0 then
+            writeText this 0 (logRows - 1) Color.OrangeRed "You died. Press Q to quit."
+
+        this.IsDirty <- true
+
+type OverlayPanelSurface() =
+    inherit ScreenSurface(viewportWidth, viewportHeight)
+
+    member this.Render(session, camera) =
+        clearSurface this
 
         match overlayViewModel session with
         | None ->
-            overlaySurface.IsVisible <- false
+            this.IsVisible <- false
         | Some overlay ->
-            overlaySurface.IsVisible <- true
+            this.IsVisible <- true
 
             match overlay.Cursor with
             | Some cursor ->
@@ -139,7 +184,7 @@ type RootScreen() as this =
                     let screenPosition = toScreenPosition camera cursor.Position
 
                     paintCell
-                        overlaySurface
+                        this
                         screenPosition.X
                         screenPosition.Y
                         (overlayCursorGlyph cursor.Style)
@@ -149,16 +194,31 @@ type RootScreen() as this =
 
             match overlay.Panel with
             | Some panel ->
-                let left, top, panelWidth, panelHeight = panelLayout width mapHeight panel.Style panel.Lines.Length
-                drawFrame overlaySurface left top panelWidth panelHeight
-                writeText overlaySurface (left + 2) (top + 1) Color.Yellow panel.Title
+                let left, top, panelWidth, panelHeight = panelLayout viewportWidth viewportHeight panel.Style panel.Lines.Length
+                drawFrame this left top panelWidth panelHeight
+                writeText this (left + 2) (top + 1) Color.Yellow panel.Title
 
                 panel.Lines
                 |> List.truncate (max 0 (panelHeight - 3))
-                |> List.iteri (fun i line -> writeText overlaySurface (left + 2) (top + 2 + i) Color.LightGray line)
+                |> List.iteri (fun i line -> writeText this (left + 2) (top + 2 + i) Color.LightGray line)
             | None -> ()
 
-        overlaySurface.IsDirty <- true
+        this.IsDirty <- true
+
+type RootScreen() as this =
+    inherit ScreenObject()
+
+    let mutable session = initialSession ()
+    let mutable camera = { X = 0; Y = 0 }
+    let bindings = defaultBindings
+    let statsPanel = new StatsPanel()
+    let cavernPanel = new CavernPanel()
+    let messagesPanel = new MessagesPanel()
+    let overlayPanel = new OverlayPanelSurface()
+
+    let configureSurface (surface: ScreenSurface) x y =
+        surface.Position <- Point(x, y)
+        this.Children.Add(surface) |> ignore
 
     let redraw () =
         let cameraFocus =
@@ -168,43 +228,10 @@ type RootScreen() as this =
             | _ -> session.State.Player.Position
 
         camera <- adjustCamera camera cameraFocus session.State.Map.Width session.State.Map.Height
-
-        clearSurface statsSurface
-        clearSurface mapSurface
-        clearSurface logSurface
-
-        writeText statsSurface 0 0 Color.White (sprintf "Depth %d" session.State.Depth)
-        writeText statsSurface 12 0 Color.White (sprintf "HP %d/%d" session.State.Player.Hp session.State.Player.MaxHp)
-        writeText statsSurface 0 1 Color.LightGray (sprintf "View %d,%d" camera.X camera.Y)
-
-        for screenY in 0 .. mapHeight - 1 do
-            for screenX in 0 .. width - 1 do
-                let worldX = camera.X + screenX
-                let worldY = camera.Y + screenY
-                let tile = session.State.Map.Tiles[worldY, worldX]
-                paintCell mapSurface screenX screenY (tileGlyph tile) (tileForeground tile) Color.Black
-
-        for monster in session.State.Monsters do
-            if isVisible monster.Position camera then
-                let screenPosition = toScreenPosition camera monster.Position
-                paintCell mapSurface screenPosition.X screenPosition.Y monster.Glyph Color.IndianRed Color.Black
-
-        if isVisible session.State.Player.Position camera then
-            let screenPosition = toScreenPosition camera session.State.Player.Position
-            paintCell mapSurface screenPosition.X screenPosition.Y session.State.Player.Glyph Color.Cyan Color.Black
-
-        session.State.Messages
-        |> List.truncate logRows
-        |> List.rev
-        |> List.iteri (fun i message -> writeText logSurface 0 i Color.LightGray message)
-
-        if session.State.Player.Hp <= 0 then
-            writeText logSurface 0 (logRows - 1) Color.OrangeRed "You died. Press Q to quit."
-
-        statsSurface.IsDirty <- true
-        mapSurface.IsDirty <- true
-        logSurface.IsDirty <- true
-        drawOverlay ()
+        statsPanel.Render(session, camera)
+        cavernPanel.Render(session, camera)
+        messagesPanel.Render(session)
+        overlayPanel.Render(session, camera)
 
     let applyIntentAndRedraw intent =
         match applyIntent intent session with
@@ -243,11 +270,11 @@ type RootScreen() as this =
 
     do
         this.UseKeyboard <- true
-        configureSurface statsSurface 0 0
-        configureSurface mapSurface 0 mapTop
-        configureSurface logSurface 0 (logTop mapHeight)
-        configureSurface overlaySurface 0 mapTop
-        overlaySurface.IsVisible <- false
+        configureSurface statsPanel 0 0
+        configureSurface cavernPanel 0 mapTop
+        configureSurface messagesPanel 0 (logTop viewportHeight)
+        configureSurface overlayPanel 0 mapTop
+        overlayPanel.IsVisible <- false
         redraw ()
 
     override _.ProcessKeyboard(keyboard: Keyboard) =
