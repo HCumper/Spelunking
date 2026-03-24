@@ -1,6 +1,9 @@
 module Spelunk.Application
 
+open Spelunk.Config
+open Spelunk.Model
 open Spelunk.Domain
+open Spelunk.Output
 
 type Modal =
     | NoModal
@@ -11,34 +14,6 @@ type Modal =
 type Session =
     { State: GameState
       Modal: Modal }
-
-type OverlayColor =
-    | Default
-    | Inverted
-    | Highlight
-
-type OverlayCursorStyle =
-    | InspectCursor
-    | TargetCursor
-
-type OverlayPanelStyle =
-    | FullWidthFooter
-    | CenterDialog
-
-type OverlayCursor =
-    { Position: Position
-      Style: OverlayCursorStyle
-      Foreground: OverlayColor
-      Background: OverlayColor }
-
-type OverlayPanel =
-    { Style: OverlayPanelStyle
-      Title: string
-      Lines: string list }
-
-type OverlayViewModel =
-    { Cursor: OverlayCursor option
-      Panel: OverlayPanel option }
 
 type Intent =
     | Act of Command
@@ -51,45 +26,30 @@ type Intent =
     | Quit
     | Ignore
 
-type Key =
-    | Up
-    | Down
-    | Left
-    | Right
-    | WaitKey
-    | ConfirmKey
-    | CancelKey
-    | LookKey
-    | TargetKey
-    | InventoryKey
-    | QuitKey
-
-type Binding =
-    { Key: Key
-      Intent: Intent }
+type Transition =
+    { NextSession: Session option
+      Events: OutputEvent list }
 
 let initialSession () =
     { State = initialState ()
       Modal = NoModal }
 
-let defaultBindings : Binding list =
-    [ { Key = QuitKey; Intent = Quit }
-      { Key = CancelKey; Intent = Cancel }
-      { Key = ConfirmKey; Intent = Confirm }
-      { Key = LookKey; Intent = OpenLook }
-      { Key = TargetKey; Intent = OpenTarget }
-      { Key = InventoryKey; Intent = OpenInventory }
-      { Key = Up; Intent = MoveCursor(0, -1) }
-      { Key = Down; Intent = MoveCursor(0, 1) }
-      { Key = Left; Intent = MoveCursor(-1, 0) }
-      { Key = Right; Intent = MoveCursor(1, 0) }
-      { Key = WaitKey; Intent = Act Wait } ]
+let private outputEvents previousSession nextSession =
+    let openedModal =
+        match previousSession.Modal, nextSession.Modal with
+        | NoModal, LookMode _
+        | NoModal, TargetMode _
+        | NoModal, InventoryMode -> true
+        | _ -> false
 
-let intentFromKey bindings key =
-    bindings
-    |> List.tryFind (fun binding -> binding.Key = key)
-    |> Option.map (fun binding -> binding.Intent)
-    |> Option.defaultValue Ignore
+    let closedModal =
+        match previousSession.Modal, nextSession.Modal with
+        | LookMode _, NoModal
+        | TargetMode _, NoModal
+        | InventoryMode, NoModal -> true
+        | _ -> false
+
+    combine previousSession.State.Messages nextSession.State.Messages openedModal closedModal
 
 let normalizeIntent session intent =
     match session.Modal, intent with
@@ -103,94 +63,10 @@ let private moveCursor mapWidth mapHeight dx dy cursor =
     { X = max 0 (min (mapWidth - 1) (cursor.X + dx))
       Y = max 0 (min (mapHeight - 1) (cursor.Y + dy)) }
 
-let private monsterAt point state =
-    state.Monsters |> List.tryFind (fun monster -> monster.Position = point)
-
-let private targetInRange target state =
-    let dx = target.X - state.Player.Position.X
-    let dy = target.Y - state.Player.Position.Y
-    max (abs dx) (abs dy) <= 8
-
-let private monsterDescription point state =
-    state.Monsters |> List.tryFind (fun monster -> monster.Position = point)
-
-let private describePoint point state =
-    if point = state.Player.Position then
-        "You. The scavenger."
-    else
-        match monsterDescription point state with
-        | Some monster -> sprintf "%s (%c), HP %d/%d." monster.Name monster.Glyph monster.Hp monster.MaxHp
-        | None ->
-            match state.Map.Tiles[point.Y, point.X] with
-            | Wall -> "Rough cavern wall."
-            | Floor -> "Open floor."
-            | StairsDown -> "A staircase leading deeper."
-
-let private inventoryLines () =
-    [ "a) Rusty raygun"
-      "b) 2 ration packs"
-      "c) Frayed field notebook"
-      ""
-      "Inventory is UI-only here. Esc closes." ]
-
-let overlayViewModel session =
-    let width = session.State.Map.Width
-    let mapHeight = session.State.Map.Height
-
-    match session.Modal with
-    | NoModal -> None
-    | LookMode cursor ->
-        Some
-            { Cursor =
-                Some
-                    { Position = cursor
-                      Style = InspectCursor
-                      Foreground = Inverted
-                      Background = Highlight }
-              Panel =
-                Some
-                    { Style = FullWidthFooter
-                      Title = "LOOK MODE"
-                      Lines =
-                        [ describePoint cursor session.State
-                          "Move cursor with arrows/WASD. Enter or Esc closes." ] } }
-    | TargetMode cursor ->
-        let targetText =
-            match monsterDescription cursor session.State with
-            | Some monster when targetInRange cursor session.State ->
-                sprintf "Target locked: %s at (%d,%d)." monster.Name cursor.X cursor.Y
-            | Some monster ->
-                sprintf "%s is out of range." monster.Name
-            | None ->
-                sprintf "No target at (%d,%d)." cursor.X cursor.Y
-
-        Some
-            { Cursor =
-                Some
-                    { Position = cursor
-                      Style = TargetCursor
-                      Foreground = Inverted
-                      Background = Highlight }
-              Panel =
-                Some
-                    { Style = FullWidthFooter
-                      Title = "TARGET MODE"
-                      Lines =
-                        [ targetText
-                          "Move cursor. Enter confirms. Esc closes." ] } }
-    | InventoryMode ->
-        Some
-            { Cursor = None
-              Panel =
-                Some
-                    { Style = CenterDialog
-                      Title = "INVENTORY"
-                      Lines = inventoryLines () } }
-
-let applyIntent intent session =
+let applyIntent intent session : Transition =
     match intent with
-    | Quit -> None
-    | Ignore -> Some session
+    | Quit -> { NextSession = None; Events = [] }
+    | Ignore -> { NextSession = Some session; Events = [] }
     | _ ->
         let mapWidth = session.State.Map.Width
         let mapHeight = session.State.Map.Height
@@ -214,8 +90,12 @@ let applyIntent intent session =
                 { session with Modal = TargetMode(moveCursor mapWidth mapHeight dx dy cursor) }
             | TargetMode cursor, Confirm ->
                 let nextState =
-                    match monsterAt cursor session.State with
-                    | Some monster when targetInRange cursor session.State ->
+                    let dx = cursor.X - session.State.Player.Position.X
+                    let dy = cursor.Y - session.State.Player.Position.Y
+                    let inRange = max (abs dx) (abs dy) <= (combatSettings ()).TargetRange
+
+                    match session.State.Monsters |> List.tryFind (fun monster -> monster.Position = cursor) with
+                    | Some monster when inRange ->
                         addMessage (sprintf "You line up a shot on the %s." monster.Name) session.State
                     | Some monster ->
                         addMessage (sprintf "The %s is out of range." monster.Name) session.State
@@ -231,4 +111,5 @@ let applyIntent intent session =
             | _, _ ->
                 session
 
-        Some nextSession
+        { NextSession = Some nextSession
+          Events = outputEvents session nextSession }

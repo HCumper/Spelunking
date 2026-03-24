@@ -2,18 +2,27 @@ module Spelunk.Program
 
 open SadConsole
 open SadConsole.Configuration
+open Spelunk.Config
 open Spelunk.Ui
 
 [<EntryPoint>]
 let main _ =
     Settings.WindowTitle <- "Spelunk"
+    let window = windowSettings ()
 
     Builder
         .GetBuilder()
-        .SetWindowSizeInCells(40, 29)
-        .SetStartingScreen<RootScreen>()
+        .ConfigureWindow(fun config _ _ ->
+            let mutable screenWidth = 0
+            let mutable screenHeight = 0
+            config.GetDeviceScreenSize(&screenWidth, &screenHeight)
+            config.SetWindowSizeInPixels(screenWidth, screenHeight)
+            config.Fullscreen <- window.Fullscreen
+            config.BorderlessWindowedFullscreen <- window.BorderlessWindowedFullscreen)
+        .SetStartingScreen(fun host -> RootScreen(host.ScreenCellsX, host.ScreenCellsY) :> IScreenObject)
         .IsStartingScreenFocused(true)
         .ConfigureFonts(true)
+        .SetDefaultFontSize(defaultFontSize ())
         .Run()
 
     0

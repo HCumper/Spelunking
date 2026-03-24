@@ -4,17 +4,19 @@ open SadConsole
 open SadConsole.Input
 open SadRogue.Primitives
 open Spelunk.Application
+open Spelunk.Config
+open Spelunk.Input
+open Spelunk.Model
+open Spelunk.Overlay
+open Spelunk.Output
 open Spelunk.Domain
 
-let private statsRows = 2
-let private gapRows = 1
-let private logRows = 6
-let private viewportWidth = 40
-let private viewportHeight = 20
-let private cameraMargin = 8
-let private mapTop = statsRows + gapRows
-let private logTop mapHeight = mapTop + mapHeight + gapRows
-let private totalHeight mapHeight = mapHeight + statsRows + gapRows + logRows
+let private ui = uiSettings ()
+let private statsWidth = ui.StatsWidth
+let private gapRows = ui.GapRows
+let private logRows = ui.LogRows
+let private cameraMargin = ui.CameraMargin
+let private panelGap = ui.PanelGap
 
 let private tileGlyph tile =
     match tile with
@@ -69,7 +71,7 @@ let private clampCameraAxis current focus viewportSize worldSize =
 
     max 0 (min maxCamera next)
 
-let private adjustCamera camera focus mapWidth mapHeight =
+let private adjustCamera viewportWidth viewportHeight camera focus mapWidth mapHeight =
     { X = clampCameraAxis camera.X focus.X viewportWidth mapWidth
       Y = clampCameraAxis camera.Y focus.Y viewportHeight mapHeight }
 
@@ -77,7 +79,7 @@ let private toScreenPosition camera worldPosition =
     { X = worldPosition.X - camera.X
       Y = worldPosition.Y - camera.Y }
 
-let private isVisible worldPosition camera =
+let private isVisible viewportWidth viewportHeight worldPosition camera =
     worldPosition.X >= camera.X
     && worldPosition.X < camera.X + viewportWidth
     && worldPosition.Y >= camera.Y
@@ -112,17 +114,27 @@ let private drawFrame (surface: ScreenSurface) left top frameWidth frameHeight =
     paintCell surface left (top + frameHeight - 1) '+' Color.White Color.Black
     paintCell surface (left + frameWidth - 1) (top + frameHeight - 1) '+' Color.White Color.Black
 
-type StatsPanel() =
-    inherit ScreenSurface(viewportWidth, statsRows)
+type StatsPanel(windowHeight) =
+    inherit ScreenSurface(statsWidth, windowHeight)
 
     member this.Render(session, camera) =
         clearSurface this
-        writeText this 0 0 Color.White (sprintf "Depth %d" session.State.Depth)
-        writeText this 12 0 Color.White (sprintf "HP %d/%d" session.State.Player.Hp session.State.Player.MaxHp)
-        writeText this 0 1 Color.LightGray (sprintf "View %d,%d" camera.X camera.Y)
+        drawFrame this 0 0 statsWidth windowHeight
+        writeText this 2 1 Color.Yellow "SCAV"
+        writeText this 2 3 Color.White (sprintf "Depth %d" session.State.Depth)
+        writeText this 2 5 Color.White (sprintf "HP %d/%d" session.State.Player.Hp session.State.Player.MaxHp)
+        writeText this 2 7 Color.LightGray (sprintf "View %d,%d" camera.X camera.Y)
+        writeText this 2 10 Color.LightGray "Move"
+        writeText this 2 11 Color.LightGray "WASD/Arrows"
+        writeText this 2 12 Color.LightGray "Pad 1-9"
+        writeText this 2 14 Color.LightGray "Look: X"
+        writeText this 2 15 Color.LightGray "Target: F"
+        writeText this 2 16 Color.LightGray "Inv: I"
+        writeText this 2 17 Color.LightGray "Wait: Sp/5"
+        writeText this 2 18 Color.LightGray "Quit: Q"
         this.IsDirty <- true
 
-type CavernPanel() =
+type CavernPanel(viewportWidth, viewportHeight) =
     inherit ScreenSurface(viewportWidth, viewportHeight)
 
     member this.Render(session, camera) =
@@ -140,17 +152,18 @@ type CavernPanel() =
                     paintCell this screenX screenY (tileGlyph tile) (exploredTileForeground tile) Color.Black
 
         for monster in session.State.Monsters do
-            if isVisible monster.Position camera && session.State.VisibleTiles[monster.Position.Y, monster.Position.X] then
+            if isVisible viewportWidth viewportHeight monster.Position camera
+               && session.State.VisibleTiles[monster.Position.Y, monster.Position.X] then
                 let screenPosition = toScreenPosition camera monster.Position
                 paintCell this screenPosition.X screenPosition.Y monster.Glyph Color.IndianRed Color.Black
 
-        if isVisible session.State.Player.Position camera then
+        if isVisible viewportWidth viewportHeight session.State.Player.Position camera then
             let screenPosition = toScreenPosition camera session.State.Player.Position
             paintCell this screenPosition.X screenPosition.Y session.State.Player.Glyph Color.Cyan Color.Black
 
         this.IsDirty <- true
 
-type MessagesPanel() =
+type MessagesPanel(viewportWidth) =
     inherit ScreenSurface(viewportWidth, logRows)
 
     member this.Render(session) =
@@ -166,7 +179,7 @@ type MessagesPanel() =
 
         this.IsDirty <- true
 
-type OverlayPanelSurface() =
+type OverlayPanelSurface(viewportWidth, viewportHeight) =
     inherit ScreenSurface(viewportWidth, viewportHeight)
 
     member this.Render(session, camera) =
@@ -180,7 +193,7 @@ type OverlayPanelSurface() =
 
             match overlay.Cursor with
             | Some cursor ->
-                if isVisible cursor.Position camera then
+                if isVisible viewportWidth viewportHeight cursor.Position camera then
                     let screenPosition = toScreenPosition camera cursor.Position
 
                     paintCell
@@ -205,16 +218,21 @@ type OverlayPanelSurface() =
 
         this.IsDirty <- true
 
-type RootScreen() as this =
+type RootScreen(screenWidth, screenHeight) as this =
     inherit ScreenObject()
 
+    let mapLeft = statsWidth + panelGap
+    let mapTop = 0
+    let viewportWidth = max 1 (screenWidth - mapLeft)
+    let viewportHeight = max 1 (screenHeight - gapRows - logRows)
+    let logTop = mapTop + viewportHeight + gapRows
     let mutable session = initialSession ()
     let mutable camera = { X = 0; Y = 0 }
     let bindings = defaultBindings
-    let statsPanel = new StatsPanel()
-    let cavernPanel = new CavernPanel()
-    let messagesPanel = new MessagesPanel()
-    let overlayPanel = new OverlayPanelSurface()
+    let statsPanel = new StatsPanel(screenHeight)
+    let cavernPanel = new CavernPanel(viewportWidth, viewportHeight)
+    let messagesPanel = new MessagesPanel(viewportWidth)
+    let overlayPanel = new OverlayPanelSurface(viewportWidth, viewportHeight)
 
     let configureSurface (surface: ScreenSurface) x y =
         surface.Position <- Point(x, y)
@@ -227,14 +245,16 @@ type RootScreen() as this =
             | TargetMode cursor -> cursor
             | _ -> session.State.Player.Position
 
-        camera <- adjustCamera camera cameraFocus session.State.Map.Width session.State.Map.Height
+        camera <- adjustCamera viewportWidth viewportHeight camera cameraFocus session.State.Map.Width session.State.Map.Height
         statsPanel.Render(session, camera)
         cavernPanel.Render(session, camera)
         messagesPanel.Render(session)
         overlayPanel.Render(session, camera)
 
     let applyIntentAndRedraw intent =
-        match applyIntent intent session with
+        let transition = applyIntent intent session
+
+        match transition.NextSession with
         | Some nextSession ->
             session <- nextSession
         | None ->
@@ -255,6 +275,24 @@ type RootScreen() as this =
             Some TargetKey
         elif keyboard.IsKeyPressed(Keys.I) then
             Some InventoryKey
+        elif keyboard.IsKeyPressed(Keys.NumPad7) then
+            Some UpLeft
+        elif keyboard.IsKeyPressed(Keys.NumPad8) then
+            Some Up
+        elif keyboard.IsKeyPressed(Keys.NumPad9) then
+            Some UpRight
+        elif keyboard.IsKeyPressed(Keys.NumPad4) then
+            Some Left
+        elif keyboard.IsKeyPressed(Keys.NumPad6) then
+            Some Right
+        elif keyboard.IsKeyPressed(Keys.NumPad1) then
+            Some DownLeft
+        elif keyboard.IsKeyPressed(Keys.NumPad2) then
+            Some Down
+        elif keyboard.IsKeyPressed(Keys.NumPad3) then
+            Some DownRight
+        elif keyboard.IsKeyPressed(Keys.NumPad5) then
+            Some WaitKey
         elif keyboard.IsKeyPressed(Keys.Up) || keyboard.IsKeyPressed(Keys.W) then
             Some Up
         elif keyboard.IsKeyPressed(Keys.Down) || keyboard.IsKeyPressed(Keys.S) then
@@ -271,9 +309,9 @@ type RootScreen() as this =
     do
         this.UseKeyboard <- true
         configureSurface statsPanel 0 0
-        configureSurface cavernPanel 0 mapTop
-        configureSurface messagesPanel 0 (logTop viewportHeight)
-        configureSurface overlayPanel 0 mapTop
+        configureSurface cavernPanel mapLeft mapTop
+        configureSurface messagesPanel mapLeft logTop
+        configureSurface overlayPanel mapLeft mapTop
         overlayPanel.IsVisible <- false
         redraw ()
 

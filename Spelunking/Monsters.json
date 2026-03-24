@@ -1,0 +1,22 @@
+{
+  "Monsters": [
+    {
+      "Id": 1,
+      "Name": "Cyberman",
+      "MaxHp": 3,
+      "Glyph": "C"
+    },
+    {
+      "Id": 2,
+      "Name": "Raston Warrior Robot",
+      "MaxHp": 4,
+      "Glyph": "R"
+    },
+    {
+      "Id": 3,
+      "Name": "Dalek",
+      "MaxHp": 5,
+      "Glyph": "D"
+    }
+  ]
+}

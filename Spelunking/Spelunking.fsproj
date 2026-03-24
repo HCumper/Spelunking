@@ -14,12 +14,22 @@
     <ItemGroup>
         <Compile Include="Dungeon.fs" />
         <Compile Include="Config.fs" />
+        <Compile Include="Model.fs" />
+        <Compile Include="Visibility.fs" />
+        <Compile Include="World.fs" />
+        <Compile Include="Simulation.fs" />
         <Compile Include="Domain.fs" />
+        <Compile Include="Output.fs" />
         <Compile Include="Application.fs" />
+        <Compile Include="Input.fs" />
+        <Compile Include="Overlay.fs" />
         <Compile Include="Ui.fs" />
         <Compile Include="Program.fs" />
         <Content Include="Readme.md" />
-        <Content Include="appsettings.json">
+        <Content Include="Appsettings.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+        <Content Include="Monsters.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
     </ItemGroup>
