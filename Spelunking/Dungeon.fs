@@ -87,7 +87,7 @@ let private randomRoom (random: Random) config =
 
 let generate config =
     let random = Random.Shared
-    let floors = Array2D.create config.MapHeight config.MapWidth false 
+    let floors = Array2D.create config.MapHeight config.MapWidth false
 
     let rooms, _ =
         (([], 0), [ 1 .. max 0 config.RoomAttempts ])
