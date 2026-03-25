@@ -1,3 +1,4 @@
+(* Procedural room-and-corridor generator that produces a floor mask and accepted room list. *)
 module Spelunk.Dungeon
 
 open System
@@ -98,6 +99,7 @@ let generate config =
             | [] ->
                 candidate :: rooms, overlapsUsed
             | _ when overlapsUsed < max 0 config.MaxOverlappingRooms ->
+                // Early overlaps expand the existing footprint instead of discarding the candidate.
                 let extended = (candidate, overlapping) ||> List.fold mergeRooms
                 extended :: remaining, overlapsUsed + 1
             | _ ->

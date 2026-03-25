@@ -1,3 +1,4 @@
+(* Composes world generation, simulation, and visibility into the game-facing state transitions. *)
 module Spelunk.Domain
 open Spelunk.Config
 open Spelunk.Model
@@ -100,6 +101,7 @@ let initialState () =
             selectedSpawns
             |> List.indexed
             |> List.choose (fun (index, spawnPoint) ->
+                // Spawn locations come from sampled rooms; monster types are chosen independently by frequency at this depth.
                 chooseWeightedMonsterTemplate depth templates random
                 |> Option.map (fun template ->
                     { Id = index + 1

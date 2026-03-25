@@ -1,3 +1,4 @@
+(* Converts generated dungeon layouts into map tiles and exposes room helpers used by spawning and stairs placement. *)
 module Spelunk.World
 
 open Spelunk.Config
@@ -28,6 +29,7 @@ let createDungeon () =
     let layout: Layout = generate (dungeonConfig ())
     let tiles = Array2D.create layout.Height layout.Width Wall
 
+    // The generator exposes only a floor mask; world creation turns those cells into concrete tiles.
     for y in 0 .. layout.Height - 1 do
         for x in 0 .. layout.Width - 1 do
             if layout.Floors[y, x] then

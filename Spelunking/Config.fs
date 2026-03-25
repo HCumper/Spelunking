@@ -1,3 +1,4 @@
+(* Loads application settings and game content data from JSON files and maps them into typed records. *)
 module Spelunk.Config
 
 open System

@@ -1,3 +1,4 @@
+(* Resolves turn-by-turn combat, ranged attacks, movement, and monster AI. *)
 module Spelunk.Simulation
 
 open Spelunk.Model
@@ -23,6 +24,7 @@ let addMessage message state =
 let private actionThreshold = 10
 
 let private damageFor attacker =
+    // Strength 10 corresponds to baseline 1 damage; larger values scale upward in whole points.
     max 1 ((attacker.Strength + actionThreshold - 1) / actionThreshold)
 
 let private addAmmo weapon delta =
@@ -98,6 +100,7 @@ let private tryFireAt target state =
         if chebyshevDistance playerPos target > weapon.Range then
             addMessage (sprintf "%s cannot reach that far." weapon.Name) state
         else
+            // Hitscan shots stop at the first wall or monster along the traced line.
             let path =
                 lineBetween playerPos target
                 |> List.tail
@@ -180,6 +183,7 @@ let private runMonsterActions state monster =
         if currentState.Player.Hp <= 0 || currentMonster.Energy < actionThreshold then
             currentState, currentMonster, notes
         else
+            // Monsters spend energy in 10-point chunks, so speed below or above 10 acts less or more often than the player.
             let actingMonster = { currentMonster with Energy = currentMonster.Energy - actionThreshold }
             let monsterState =
                 { currentState with

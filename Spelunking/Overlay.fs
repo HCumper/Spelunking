@@ -1,3 +1,4 @@
+(* Builds transient overlay view models for look mode, target mode, inventory, and quit confirmation. *)
 module Spelunk.Overlay
 
 open Spelunk.Model

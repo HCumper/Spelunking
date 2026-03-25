@@ -1,3 +1,4 @@
+(* Maps gameplay and UI transitions onto future speech and sound output events. *)
 module Spelunk.Output
 
 type SoundCue =

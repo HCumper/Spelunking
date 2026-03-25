@@ -1,3 +1,4 @@
+(* Defines abstract input keys and the default mapping from keys to application intents. *)
 module Spelunk.Input
 
 open Spelunk.Application
@@ -25,6 +26,7 @@ type Binding =
       Intent: Intent }
 
 let defaultBindings : Binding list =
+    // Movement keys feed cursor movement first; Application.normalizeIntent turns that into walking when no modal is open.
     [ { Key = QuitKey; Intent = Quit }
       { Key = CancelKey; Intent = Cancel }
       { Key = ConfirmKey; Intent = Confirm }

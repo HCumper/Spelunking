@@ -1,3 +1,4 @@
+(* Computes field-of-view and persistent exploration memory for the player. *)
 module Spelunk.Visibility
 
 open Spelunk.Config
@@ -45,6 +46,7 @@ let private positionsOnLine startPoint endPoint =
     walk startPoint.X startPoint.Y (dx - dy) []
 
 let private hasLineOfSight map startPoint endPoint =
+    // Intermediate walls block vision, but the destination tile itself may still be seen.
     positionsOnLine startPoint endPoint
     |> List.skip 1
     |> List.takeWhile (fun point -> point <> endPoint)
@@ -56,6 +58,7 @@ let computeVisibility state =
     let explored = copyGrid state.ExploredTiles
     let origin = state.Player.Position
 
+    // Visibility is evaluated inside a radius-limited square and then filtered by LOS.
     for y in max 0 (origin.Y - radius) .. min (state.Map.Height - 1) (origin.Y + radius) do
         for x in max 0 (origin.X - radius) .. min (state.Map.Width - 1) (origin.X + radius) do
             let point = { X = x; Y = y }

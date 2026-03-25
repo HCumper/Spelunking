@@ -1,3 +1,4 @@
+(* SadConsole presentation layer: panel layout, camera control, input polling, and draggable splitters. *)
 module Spelunk.Ui
 
 open SadConsole
@@ -61,6 +62,7 @@ let private clampCameraAxis current focus viewportSize worldSize =
     let maxFocus = current + viewportSize - cameraMargin - 1
     let maxCamera = max 0 (worldSize - viewportSize)
 
+    // The camera only shifts once the focus point approaches the viewport margin.
     let next =
         if focus < minFocus then
             focus - cameraMargin
@@ -76,6 +78,7 @@ let private adjustCamera viewportWidth viewportHeight camera focus mapWidth mapH
       Y = clampCameraAxis camera.Y focus.Y viewportHeight mapHeight }
 
 let private toScreenPosition camera worldPosition =
+    // Screen coordinates are world coordinates translated by the current camera origin.
     { X = worldPosition.X - camera.X
       Y = worldPosition.Y - camera.Y }
 
@@ -143,6 +146,7 @@ type DividerPanel(width, height, glyph, onPress: MouseScreenObjectState -> unit,
                 this.IsExclusiveMouse <- true
                 onPress state
             | Some start when start <> state.WorldCellPosition ->
+                // A click without movement is ignored; resizing starts only after the drag crosses into a new cell.
                 onDrag state
             | Some _ -> ()
 
@@ -342,6 +346,7 @@ type RootScreen(screenWidth, screenHeight) as this =
         let mapLeft = statsPanelWidth + dividerThickness
         let dividerTop = cavernHeight
 
+        // The cavern expands to consume whatever space remains after sidebar and log constraints are applied.
         statsPanel.Resize(statsPanelWidth, screenHeight, false)
         statsPanel.Position <- Point(0, 0)
 
@@ -369,6 +374,7 @@ type RootScreen(screenWidth, screenHeight) as this =
             | TargetMode cursor -> cursor
             | _ -> session.State.Player.Position
 
+        // Modal cursors reuse the same camera-follow rules as the player.
         camera <- adjustCamera viewportWidth viewportHeight camera cameraFocus session.State.Map.Width session.State.Map.Height
         statsPanel.Render(session, camera)
         verticalDivider.Render()

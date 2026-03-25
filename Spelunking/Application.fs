@@ -1,3 +1,4 @@
+(* Translates player intents into modal UI state changes and domain commands. *)
 module Spelunk.Application
 
 open Spelunk.Config
@@ -105,6 +106,7 @@ let applyIntent intent session : Transition =
             | TargetMode cursor, Confirm ->
                 let nextState =
                     if targetInRange cursor session.State then
+                        // Target mode is an aiming UI; the actual shot resolves through the normal command pipeline.
                         update (FireAt cursor) session.State
                     else
                         addMessage

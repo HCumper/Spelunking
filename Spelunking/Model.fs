@@ -1,3 +1,4 @@
+(* Core domain types shared by generation, simulation, application state, and UI rendering. *)
 module Spelunk.Model
 
 type Position = { X: int; Y: int }
