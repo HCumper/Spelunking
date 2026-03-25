@@ -6,45 +6,46 @@ open System.IO
 open System.Text.Json
 open Spelunk.Model
 
-[<CLIMutable>]
-type SaveActor =
-    { Id: int
-      Name: string
-      X: int
-      Y: int
-      Hp: int
-      MaxHp: int
-      Speed: int
-      Strength: int
-      Energy: int
-      Glyph: string }
+module Dto =
+    [<CLIMutable>]
+    type SaveActor =
+        { Id: int
+          Name: string
+          X: int
+          Y: int
+          Hp: int
+          MaxHp: int
+          Speed: int
+          Strength: int
+          Energy: int
+          Glyph: string }
 
-[<CLIMutable>]
-type SaveWeapon =
-    { Name: string
-      Range: int
-      Damage: int
-      Ammo: int option }
+    [<CLIMutable>]
+    type SaveWeapon =
+        { Name: string
+          Range: int
+          Damage: int
+          Ammo: int option }
 
-[<CLIMutable>]
-type SaveGameState =
-    { Depth: int
-      TurnCount: int
-      MapWidth: int
-      MapHeight: int
-      TilesRle: string
-      Player: SaveActor
-      PlayerWeapon: SaveWeapon
-      Monsters: SaveActor list
-      VisibleTilesRle: string
-      ExploredTilesRle: string
-      Messages: string list }
+    [<CLIMutable>]
+    type SaveGameState =
+        { Depth: int
+          TurnCount: int
+          MapWidth: int
+          MapHeight: int
+          TilesRle: string
+          Player: SaveActor
+          PlayerWeapon: SaveWeapon
+          Monsters: SaveActor list
+          VisibleTilesRle: string
+          ExploredTilesRle: string
+          Messages: string list }
 
-[<CLIMutable>]
-type SaveSession =
-    { Version: int
-      State: SaveGameState
-      History: SaveGameState list }
+    [<CLIMutable>]
+    type SaveSession =
+        { Version: int
+          State: SaveGameState
+          History: SaveGameState list }
 
 let private options =
     JsonSerializerOptions(WriteIndented = true, PropertyNameCaseInsensitive = true)
@@ -67,7 +68,7 @@ let private charToTile glyph =
     | '>' -> StairsDown
     | other -> invalidOp $"Unsupported tile glyph '{other}' in save file."
 
-let private actorToSave (actor: Actor) : SaveActor =
+let private actorToSave (actor: Actor) : Dto.SaveActor =
     { Id = actor.Id
       Name = actor.Name
       X = actor.Position.X
@@ -79,7 +80,7 @@ let private actorToSave (actor: Actor) : SaveActor =
       Energy = actor.Energy
       Glyph = string actor.Glyph }
 
-let private actorFromSave (actor: SaveActor) : Actor =
+let private actorFromSave (actor: Dto.SaveActor) : Actor =
     { Id = actor.Id
       Name = actor.Name
       Position = { X = actor.X; Y = actor.Y }
@@ -94,13 +95,13 @@ let private actorFromSave (actor: SaveActor) : Actor =
         | "" -> '?'
         | value -> value[0] }
 
-let private weaponToSave (weapon: Weapon) : SaveWeapon =
+let private weaponToSave (weapon: Weapon) : Dto.SaveWeapon =
     { Name = weapon.Name
       Range = weapon.Range
       Damage = weapon.Damage
       Ammo = weapon.Ammo }
 
-let private weaponFromSave (weapon: SaveWeapon) : Weapon =
+let private weaponFromSave (weapon: Dto.SaveWeapon) : Weapon =
     { Name = weapon.Name
       Range = weapon.Range
       Damage = weapon.Damage
@@ -184,7 +185,7 @@ let private mapFromRle (width: int) (height: int) (encoded: string) : Map =
       Height = height
       Tiles = tiles }
 
-let private stateToSave (state: GameState) : SaveGameState =
+let private stateToSave (state: GameState) : Dto.SaveGameState =
     { Depth = state.Depth
       TurnCount = state.TurnCount
       MapWidth = state.Map.Width
@@ -197,7 +198,7 @@ let private stateToSave (state: GameState) : SaveGameState =
       ExploredTilesRle = gridToRle state.ExploredTiles
       Messages = state.Messages }
 
-let private stateFromSave (state: SaveGameState) : GameState =
+let private stateFromSave (state: Dto.SaveGameState) : GameState =
     { Depth = state.Depth
       TurnCount = state.TurnCount
       Map = mapFromRle state.MapWidth state.MapHeight state.TilesRle
@@ -209,7 +210,7 @@ let private stateFromSave (state: SaveGameState) : GameState =
       Messages = state.Messages }
 
 let saveGame (state: GameState) (history: GameState list) : unit =
-    let payload =
+    let payload : Dto.SaveSession =
         { Version = 1
           State = stateToSave state
           History = history |> List.map stateToSave }
@@ -224,7 +225,7 @@ let tryLoadGame () : (GameState * GameState list) option =
         None
     else
         let json = File.ReadAllText path
-        let loaded: SaveSession = JsonSerializer.Deserialize<SaveSession>(json, options)
+        let loaded: Dto.SaveSession = JsonSerializer.Deserialize<Dto.SaveSession>(json, options)
 
         if obj.ReferenceEquals(loaded, null) then
             None

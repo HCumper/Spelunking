@@ -11,6 +11,8 @@ open Spelunk.Model
 open Spelunk.Overlay
 open Spelunk.Output
 open Spelunk.Domain
+open Spelunk.SessionActions
+open Spelunk.Services
 
 let private ui = uiSettings ()
 let private statsWidth = ui.StatsWidth
@@ -116,6 +118,44 @@ let private drawFrame (surface: ScreenSurface) left top frameWidth frameHeight =
     paintCell surface (left + frameWidth - 1) top '+' Color.White Color.Black
     paintCell surface left (top + frameHeight - 1) '+' Color.White Color.Black
     paintCell surface (left + frameWidth - 1) (top + frameHeight - 1) '+' Color.White Color.Black
+
+let private keyTable : (Key * Keys list) list =
+    [ QuitKey, [ Keys.Q ]
+      CancelKey, [ Keys.Escape ]
+      ConfirmKey, [ Keys.Enter ]
+      LookKey, [ Keys.X ]
+      TargetKey, [ Keys.F ]
+      InventoryKey, [ Keys.I ]
+      TimeShifterKey, [ Keys.T ]
+      SaveKey, [ Keys.F5 ]
+      LoadKey, [ Keys.F9 ]
+      UpLeft, [ Keys.NumPad7 ]
+      Up, [ Keys.NumPad8; Keys.Up; Keys.W ]
+      UpRight, [ Keys.NumPad9 ]
+      Left, [ Keys.NumPad4; Keys.Left; Keys.A ]
+      Right, [ Keys.NumPad6; Keys.Right; Keys.D ]
+      DownLeft, [ Keys.NumPad1 ]
+      Down, [ Keys.NumPad2; Keys.Down; Keys.S ]
+      DownRight, [ Keys.NumPad3 ]
+      WaitKey, [ Keys.NumPad5; Keys.Space ] ]
+
+let private timeShiftPromptKeyTable : (Key * Keys list) list =
+    [ BackspaceKey, [ Keys.Back ]
+      DigitKey 0, [ Keys.D0; Keys.NumPad0 ]
+      DigitKey 1, [ Keys.D1; Keys.NumPad1 ]
+      DigitKey 2, [ Keys.D2; Keys.NumPad2 ]
+      DigitKey 3, [ Keys.D3; Keys.NumPad3 ]
+      DigitKey 4, [ Keys.D4; Keys.NumPad4 ]
+      DigitKey 5, [ Keys.D5; Keys.NumPad5 ]
+      DigitKey 6, [ Keys.D6; Keys.NumPad6 ]
+      DigitKey 7, [ Keys.D7; Keys.NumPad7 ]
+      DigitKey 8, [ Keys.D8; Keys.NumPad8 ]
+      DigitKey 9, [ Keys.D9; Keys.NumPad9 ] ]
+
+let private pressedMappedKey (keyboard: Keyboard) (mappings: (Key * Keys list) list) =
+    mappings
+    |> List.tryFind (fun (_, keys) -> keys |> List.exists keyboard.IsKeyPressed)
+    |> Option.map fst
 
 type DividerPanel(width, height, glyph, onPress: MouseScreenObjectState -> unit, onDrag: MouseScreenObjectState -> unit, onRelease: unit -> unit) as this =
     inherit ScreenSurface(width, height)
@@ -289,6 +329,7 @@ type RootScreen(screenWidth, screenHeight) as this =
     let mutable session = initialSession ()
     let mutable camera = { X = 0; Y = 0 }
     let bindings = defaultBindings
+    let services = liveServices
     let mutable relayout = (fun () -> ())
     let mutable requestRedraw = (fun () -> ())
     let mutable activeDrag: string option = None
@@ -391,7 +432,7 @@ type RootScreen(screenWidth, screenHeight) as this =
         requestRedraw <- redraw
 
     let applyIntentAndRedraw intent =
-        let transition = applyIntent intent session
+        let transition = applyIntent services intent session
 
         match transition.NextSession with
         | Some nextSession ->
@@ -402,86 +443,13 @@ type RootScreen(screenWidth, screenHeight) as this =
         redraw ()
 
     let tryGetKey session (keyboard: Keyboard) =
-        let digitKey =
-            match session.Modal with
-            | TimeShiftPrompt _ ->
-                if keyboard.IsKeyPressed(Keys.Back) then
-                    Some BackspaceKey
-                elif keyboard.IsKeyPressed(Keys.D0) || keyboard.IsKeyPressed(Keys.NumPad0) then
-                    Some(DigitKey 0)
-                elif keyboard.IsKeyPressed(Keys.D1) || keyboard.IsKeyPressed(Keys.NumPad1) then
-                    Some(DigitKey 1)
-                elif keyboard.IsKeyPressed(Keys.D2) || keyboard.IsKeyPressed(Keys.NumPad2) then
-                    Some(DigitKey 2)
-                elif keyboard.IsKeyPressed(Keys.D3) || keyboard.IsKeyPressed(Keys.NumPad3) then
-                    Some(DigitKey 3)
-                elif keyboard.IsKeyPressed(Keys.D4) || keyboard.IsKeyPressed(Keys.NumPad4) then
-                    Some(DigitKey 4)
-                elif keyboard.IsKeyPressed(Keys.D5) || keyboard.IsKeyPressed(Keys.NumPad5) then
-                    Some(DigitKey 5)
-                elif keyboard.IsKeyPressed(Keys.D6) || keyboard.IsKeyPressed(Keys.NumPad6) then
-                    Some(DigitKey 6)
-                elif keyboard.IsKeyPressed(Keys.D7) || keyboard.IsKeyPressed(Keys.NumPad7) then
-                    Some(DigitKey 7)
-                elif keyboard.IsKeyPressed(Keys.D8) || keyboard.IsKeyPressed(Keys.NumPad8) then
-                    Some(DigitKey 8)
-                elif keyboard.IsKeyPressed(Keys.D9) || keyboard.IsKeyPressed(Keys.NumPad9) then
-                    Some(DigitKey 9)
-                else
-                    None
-            | _ -> None
-
-        match digitKey with
-        | Some key -> Some key
-        | None ->
-            if keyboard.IsKeyPressed(Keys.Q) then
-                Some QuitKey
-            elif keyboard.IsKeyPressed(Keys.Escape) then
-                Some CancelKey
-            elif keyboard.IsKeyPressed(Keys.Enter) then
-                Some ConfirmKey
-            elif keyboard.IsKeyPressed(Keys.X) then
-                Some LookKey
-            elif keyboard.IsKeyPressed(Keys.F) then
-                Some TargetKey
-            elif keyboard.IsKeyPressed(Keys.I) then
-                Some InventoryKey
-            elif keyboard.IsKeyPressed(Keys.T) then
-                Some TimeShifterKey
-            elif keyboard.IsKeyPressed(Keys.F5) then
-                Some SaveKey
-            elif keyboard.IsKeyPressed(Keys.F9) then
-                Some LoadKey
-            elif keyboard.IsKeyPressed(Keys.NumPad7) then
-                Some UpLeft
-            elif keyboard.IsKeyPressed(Keys.NumPad8) then
-                Some Up
-            elif keyboard.IsKeyPressed(Keys.NumPad9) then
-                Some UpRight
-            elif keyboard.IsKeyPressed(Keys.NumPad4) then
-                Some Left
-            elif keyboard.IsKeyPressed(Keys.NumPad6) then
-                Some Right
-            elif keyboard.IsKeyPressed(Keys.NumPad1) then
-                Some DownLeft
-            elif keyboard.IsKeyPressed(Keys.NumPad2) then
-                Some Down
-            elif keyboard.IsKeyPressed(Keys.NumPad3) then
-                Some DownRight
-            elif keyboard.IsKeyPressed(Keys.NumPad5) then
-                Some WaitKey
-            elif keyboard.IsKeyPressed(Keys.Up) || keyboard.IsKeyPressed(Keys.W) then
-                Some Up
-            elif keyboard.IsKeyPressed(Keys.Down) || keyboard.IsKeyPressed(Keys.S) then
-                Some Down
-            elif keyboard.IsKeyPressed(Keys.Left) || keyboard.IsKeyPressed(Keys.A) then
-                Some Left
-            elif keyboard.IsKeyPressed(Keys.Right) || keyboard.IsKeyPressed(Keys.D) then
-                Some Right
-            elif keyboard.IsKeyPressed(Keys.Space) then
-                Some WaitKey
-            else
-                None
+        match session.Modal with
+        | TimeShiftPrompt _ ->
+            match pressedMappedKey keyboard timeShiftPromptKeyTable with
+            | Some key -> Some key
+            | None -> pressedMappedKey keyboard keyTable
+        | _ ->
+            pressedMappedKey keyboard keyTable
 
     do
         this.UseKeyboard <- true

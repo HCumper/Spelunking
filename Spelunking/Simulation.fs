@@ -1,6 +1,8 @@
 (* Resolves turn-by-turn combat, ranged attacks, movement, and monster AI. *)
 module Spelunk.Simulation
 
+open Spelunk.Combat
+open Spelunk.Messages
 open Spelunk.Model
 
 let tileAt map point =
@@ -15,24 +17,7 @@ let isWalkable tile =
 let actorAt point actors =
     actors |> List.tryFind (fun actor -> actor.Position = point)
 
-let clampHp actor hp =
-    { actor with Hp = max 0 (min actor.MaxHp hp) }
-
-let addMessage message state =
-    { state with Messages = message :: state.Messages |> List.truncate 6 }
-
 let private actionThreshold = 10
-
-let private damageFor attacker =
-    // Strength 10 corresponds to baseline 1 damage; larger values scale upward in whole points.
-    max 1 ((attacker.Strength + actionThreshold - 1) / actionThreshold)
-
-let private addAmmo weapon delta =
-    { weapon with
-        Ammo =
-            match weapon.Ammo with
-            | Some ammo -> Some(max 0 (ammo + delta))
-            | None -> None }
 
 let tryMoveActor map actors actor dx dy =
     let destination =
@@ -53,15 +38,6 @@ let tryMoveActor map actors actor dx dy =
         Error "Something is already there."
     else
         Ok { actor with Position = destination }
-
-let attack attacker target =
-    clampHp target (target.Hp - damageFor attacker)
-
-let private attackWithWeapon weapon target =
-    clampHp target (target.Hp - max 1 weapon.Damage)
-
-let private killBoost maxHp =
-    (maxHp + 1) / 2
 
 let private chebyshevDistance a b =
     max (abs (a.X - b.X)) (abs (a.Y - b.Y))
