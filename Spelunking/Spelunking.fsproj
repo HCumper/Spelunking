@@ -25,12 +25,16 @@
         <Compile Include="Overlay.fs" />
         <Compile Include="Ui.fs" />
         <Compile Include="Program.fs" />
-        <Content Include="Readme.md" />
         <Content Include="Appsettings.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
-        <Content Include="Monsters.json">
+        <Content Include="Data\Monsters.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <TargetPath>Data\Monsters.json</TargetPath>
+        </Content>
+        <Content Include="Data\Weapons.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <TargetPath>Data\Weapons.json</TargetPath>
         </Content>
     </ItemGroup>
 

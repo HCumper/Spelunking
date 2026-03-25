@@ -114,19 +114,65 @@ let private drawFrame (surface: ScreenSurface) left top frameWidth frameHeight =
     paintCell surface left (top + frameHeight - 1) '+' Color.White Color.Black
     paintCell surface (left + frameWidth - 1) (top + frameHeight - 1) '+' Color.White Color.Black
 
+type DividerPanel(width, height, glyph, onPress: MouseScreenObjectState -> unit, onDrag: MouseScreenObjectState -> unit, onRelease: unit -> unit) as this =
+    inherit ScreenSurface(width, height)
+
+    let mutable pressedAt: Point option = None
+
+    do
+        this.UseMouse <- true
+        this.IsExclusiveMouse <- false
+        this.FocusOnMouseClick <- false
+
+    member this.Render() =
+        clearSurface this
+
+        for y in 0 .. this.Surface.Height - 1 do
+            for x in 0 .. this.Surface.Width - 1 do
+                paintCell this x y glyph Color.Gray Color.Black
+
+        this.IsDirty <- true
+
+    override _.ProcessMouse(state: MouseScreenObjectState) =
+        if not state.IsOnScreenObject && not this.IsExclusiveMouse then
+            base.ProcessMouse(state)
+        elif state.Mouse.LeftButtonDown then
+            match pressedAt with
+            | None ->
+                pressedAt <- Some state.WorldCellPosition
+                this.IsExclusiveMouse <- true
+                onPress state
+            | Some start when start <> state.WorldCellPosition ->
+                onDrag state
+            | Some _ -> ()
+
+            true
+        else
+            pressedAt <- None
+            this.IsExclusiveMouse <- false
+            onRelease ()
+            base.ProcessMouse(state)
+
+    override _.LostMouse(state: MouseScreenObjectState) =
+        if not state.Mouse.LeftButtonDown then
+            pressedAt <- None
+            this.IsExclusiveMouse <- false
+            onRelease ()
+
+        base.LostMouse(state)
+
 type StatsPanel(windowHeight) =
     inherit ScreenSurface(statsWidth, windowHeight)
 
     member this.Render(session, camera) =
         clearSurface this
-        drawFrame this 0 0 statsWidth windowHeight
+        let width = this.Surface.Width
+        let height = this.Surface.Height
+        drawFrame this 0 0 width height
         writeText this 2 1 Color.Yellow "SCAV"
         writeText this 2 3 Color.White (sprintf "Depth %d" session.State.Depth)
         writeText this 2 5 Color.White (sprintf "HP %d/%d" session.State.Player.Hp session.State.Player.MaxHp)
         writeText this 2 7 Color.LightGray (sprintf "View %d,%d" camera.X camera.Y)
-        writeText this 2 10 Color.LightGray "Move"
-        writeText this 2 11 Color.LightGray "WASD/Arrows"
-        writeText this 2 12 Color.LightGray "Pad 1-9"
         writeText this 2 14 Color.LightGray "Look: X"
         writeText this 2 15 Color.LightGray "Target: F"
         writeText this 2 16 Color.LightGray "Inv: I"
@@ -139,9 +185,11 @@ type CavernPanel(viewportWidth, viewportHeight) =
 
     member this.Render(session, camera) =
         clearSurface this
+        let width = this.Surface.Width
+        let height = this.Surface.Height
 
-        for screenY in 0 .. viewportHeight - 1 do
-            for screenX in 0 .. viewportWidth - 1 do
+        for screenY in 0 .. height - 1 do
+            for screenX in 0 .. width - 1 do
                 let worldX = camera.X + screenX
                 let worldY = camera.Y + screenY
                 let tile = session.State.Map.Tiles[worldY, worldX]
@@ -152,12 +200,12 @@ type CavernPanel(viewportWidth, viewportHeight) =
                     paintCell this screenX screenY (tileGlyph tile) (exploredTileForeground tile) Color.Black
 
         for monster in session.State.Monsters do
-            if isVisible viewportWidth viewportHeight monster.Position camera
+            if isVisible width height monster.Position camera
                && session.State.VisibleTiles[monster.Position.Y, monster.Position.X] then
                 let screenPosition = toScreenPosition camera monster.Position
                 paintCell this screenPosition.X screenPosition.Y monster.Glyph Color.IndianRed Color.Black
 
-        if isVisible viewportWidth viewportHeight session.State.Player.Position camera then
+        if isVisible width height session.State.Player.Position camera then
             let screenPosition = toScreenPosition camera session.State.Player.Position
             paintCell this screenPosition.X screenPosition.Y session.State.Player.Glyph Color.Cyan Color.Black
 
@@ -168,14 +216,15 @@ type MessagesPanel(viewportWidth) =
 
     member this.Render(session) =
         clearSurface this
+        let height = this.Surface.Height
 
         session.State.Messages
-        |> List.truncate logRows
+        |> List.truncate height
         |> List.rev
         |> List.iteri (fun i message -> writeText this 0 i Color.LightGray message)
 
         if session.State.Player.Hp <= 0 then
-            writeText this 0 (logRows - 1) Color.OrangeRed "You died. Press Q to quit."
+            writeText this 0 (height - 1) Color.OrangeRed "You died. Press Q to quit."
 
         this.IsDirty <- true
 
@@ -184,6 +233,8 @@ type OverlayPanelSurface(viewportWidth, viewportHeight) =
 
     member this.Render(session, camera) =
         clearSurface this
+        let width = this.Surface.Width
+        let height = this.Surface.Height
 
         match overlayViewModel session with
         | None ->
@@ -193,7 +244,7 @@ type OverlayPanelSurface(viewportWidth, viewportHeight) =
 
             match overlay.Cursor with
             | Some cursor ->
-                if isVisible viewportWidth viewportHeight cursor.Position camera then
+                if isVisible width height cursor.Position camera then
                     let screenPosition = toScreenPosition camera cursor.Position
 
                     paintCell
@@ -207,7 +258,7 @@ type OverlayPanelSurface(viewportWidth, viewportHeight) =
 
             match overlay.Panel with
             | Some panel ->
-                let left, top, panelWidth, panelHeight = panelLayout viewportWidth viewportHeight panel.Style panel.Lines.Length
+                let left, top, panelWidth, panelHeight = panelLayout width height panel.Style panel.Lines.Length
                 drawFrame this left top panelWidth panelHeight
                 writeText this (left + 2) (top + 1) Color.Yellow panel.Title
 
@@ -221,24 +272,97 @@ type OverlayPanelSurface(viewportWidth, viewportHeight) =
 type RootScreen(screenWidth, screenHeight) as this =
     inherit ScreenObject()
 
-    let mapLeft = statsWidth + panelGap
-    let mapTop = 0
-    let viewportWidth = max 1 (screenWidth - mapLeft)
-    let viewportHeight = max 1 (screenHeight - gapRows - logRows)
-    let logTop = mapTop + viewportHeight + gapRows
+    let dividerThickness = 1
+    let minStatsWidth = 12
+    let minMessagesHeight = 3
+    let minCavernWidth = 20
+    let minCavernHeight = 8
+    let mutable statsPanelWidth = max minStatsWidth statsWidth
+    let mutable messagesPanelHeight = max minMessagesHeight logRows
     let mutable session = initialSession ()
     let mutable camera = { X = 0; Y = 0 }
     let bindings = defaultBindings
+    let mutable relayout = (fun () -> ())
+    let mutable requestRedraw = (fun () -> ())
+    let mutable activeDrag: string option = None
     let statsPanel = new StatsPanel(screenHeight)
-    let cavernPanel = new CavernPanel(viewportWidth, viewportHeight)
-    let messagesPanel = new MessagesPanel(viewportWidth)
-    let overlayPanel = new OverlayPanelSurface(viewportWidth, viewportHeight)
+    let verticalDivider =
+        new DividerPanel(
+            dividerThickness,
+            screenHeight,
+            '|',
+            (fun _ ->
+                match activeDrag with
+                | None -> activeDrag <- Some "vertical"
+                | _ -> ()),
+            (fun state ->
+                match activeDrag with
+                | Some "vertical" ->
+                    statsPanelWidth <- state.WorldCellPosition.X
+                    relayout ()
+                    requestRedraw ()
+                | _ -> ()),
+            (fun () ->
+                match activeDrag with
+                | Some "vertical" -> activeDrag <- None
+                | _ -> ()))
+    let cavernPanel = new CavernPanel(max 1 (screenWidth - statsPanelWidth - dividerThickness), max 1 (screenHeight - dividerThickness - messagesPanelHeight))
+    let horizontalDivider =
+        new DividerPanel(
+            cavernPanel.Surface.Width,
+            dividerThickness,
+            '-',
+            (fun _ ->
+                match activeDrag with
+                | None -> activeDrag <- Some "horizontal"
+                | _ -> ()),
+            (fun state ->
+                match activeDrag with
+                | Some "horizontal" ->
+                    messagesPanelHeight <- screenHeight - state.WorldCellPosition.Y - dividerThickness
+                    relayout ()
+                    requestRedraw ()
+                | _ -> ()),
+            (fun () ->
+                match activeDrag with
+                | Some "horizontal" -> activeDrag <- None
+                | _ -> ()))
+    let messagesPanel = new MessagesPanel(cavernPanel.Surface.Width)
+    let overlayPanel = new OverlayPanelSurface(cavernPanel.Surface.Width, cavernPanel.Surface.Height)
 
     let configureSurface (surface: ScreenSurface) x y =
         surface.Position <- Point(x, y)
         this.Children.Add(surface) |> ignore
 
+    let layoutPanels () =
+        statsPanelWidth <- max minStatsWidth (min (screenWidth - dividerThickness - minCavernWidth) statsPanelWidth)
+        let rightWidth = max minCavernWidth (screenWidth - statsPanelWidth - dividerThickness)
+        messagesPanelHeight <- max minMessagesHeight (min (screenHeight - dividerThickness - minCavernHeight) messagesPanelHeight)
+        let cavernHeight = max minCavernHeight (screenHeight - dividerThickness - messagesPanelHeight)
+        let mapLeft = statsPanelWidth + dividerThickness
+        let dividerTop = cavernHeight
+
+        statsPanel.Resize(statsPanelWidth, screenHeight, false)
+        statsPanel.Position <- Point(0, 0)
+
+        verticalDivider.Resize(dividerThickness, screenHeight, false)
+        verticalDivider.Position <- Point(statsPanelWidth, 0)
+
+        cavernPanel.Resize(rightWidth, cavernHeight, false)
+        cavernPanel.Position <- Point(mapLeft, 0)
+
+        horizontalDivider.Resize(rightWidth, dividerThickness, false)
+        horizontalDivider.Position <- Point(mapLeft, dividerTop)
+
+        messagesPanel.Resize(rightWidth, messagesPanelHeight, false)
+        messagesPanel.Position <- Point(mapLeft, dividerTop + dividerThickness)
+
+        overlayPanel.Resize(rightWidth, cavernHeight, false)
+        overlayPanel.Position <- Point(mapLeft, 0)
+
     let redraw () =
+        let viewportWidth = cavernPanel.Surface.Width
+        let viewportHeight = cavernPanel.Surface.Height
         let cameraFocus =
             match session.Modal with
             | LookMode cursor
@@ -247,9 +371,15 @@ type RootScreen(screenWidth, screenHeight) as this =
 
         camera <- adjustCamera viewportWidth viewportHeight camera cameraFocus session.State.Map.Width session.State.Map.Height
         statsPanel.Render(session, camera)
+        verticalDivider.Render()
         cavernPanel.Render(session, camera)
+        horizontalDivider.Render()
         messagesPanel.Render(session)
         overlayPanel.Render(session, camera)
+
+    do
+        relayout <- layoutPanels
+        requestRedraw <- redraw
 
     let applyIntentAndRedraw intent =
         let transition = applyIntent intent session
@@ -309,10 +439,13 @@ type RootScreen(screenWidth, screenHeight) as this =
     do
         this.UseKeyboard <- true
         configureSurface statsPanel 0 0
-        configureSurface cavernPanel mapLeft mapTop
-        configureSurface messagesPanel mapLeft logTop
-        configureSurface overlayPanel mapLeft mapTop
+        configureSurface verticalDivider 0 0
+        configureSurface cavernPanel 0 0
+        configureSurface horizontalDivider 0 0
+        configureSurface messagesPanel 0 0
+        configureSurface overlayPanel 0 0
         overlayPanel.IsVisible <- false
+        layoutPanels ()
         redraw ()
 
     override _.ProcessKeyboard(keyboard: Keyboard) =

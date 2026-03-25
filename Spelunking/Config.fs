@@ -25,8 +25,11 @@ type UiSettings =
       SightRadius: int }
 
 type CombatSettings =
-    { TargetRange: int
-      MonsterAttackDamage: int }
+    { TargetRange: int }
+
+type SpawnSettings =
+    { MonsterRoomDensity: float
+      MaxMonsters: int }
 
 type WindowSettings =
     { Fullscreen: bool
@@ -34,19 +37,33 @@ type WindowSettings =
       DefaultFontSize: string }
 
 type MonsterTemplate =
-    { Id: int
-      Name: string
+    { Name: string
       MaxHp: int
-      Glyph: string }
+      Glyph: string
+      Frequency: int
+      MinDepth: int
+      MaxDepth: int
+      Speed: int
+      Strength: int }
+
+type WeaponTemplate =
+    { Name: string
+      Range: int
+      Damage: int
+      Ammo: int option }
 
 type AppSettings =
     { Dungeon: DungeonSettings
       Ui: UiSettings
       Combat: CombatSettings
+      Spawn: SpawnSettings
       Window: WindowSettings }
 
 type MonsterCollection =
     { Monsters: MonsterTemplate list }
+
+type WeaponCollection =
+    { Weapons: WeaponTemplate list }
 
 let private options =
     let settings = JsonSerializerOptions(PropertyNameCaseInsensitive = true)
@@ -70,7 +87,7 @@ let private loadSettings () : AppSettings =
 let private loadedSettings : Lazy<AppSettings> = lazy (loadSettings ())
 
 let private loadMonsters () : MonsterCollection =
-    let path = Path.Combine(AppContext.BaseDirectory, "Monsters.json")
+    let path = Path.Combine(AppContext.BaseDirectory, "Data", "Monsters.json")
 
     if not (File.Exists path) then
         invalidOp $"Missing monster data file: {path}"
@@ -84,6 +101,22 @@ let private loadMonsters () : MonsterCollection =
         loaded
 
 let private loadedMonsters : Lazy<MonsterCollection> = lazy (loadMonsters ())
+
+let private loadWeapons () : WeaponCollection =
+    let path = Path.Combine(AppContext.BaseDirectory, "Data", "Weapons.json")
+
+    if not (File.Exists path) then
+        invalidOp $"Missing weapon data file: {path}"
+
+    let json = File.ReadAllText path
+    let loaded: WeaponCollection = JsonSerializer.Deserialize<WeaponCollection>(json, options)
+
+    if obj.ReferenceEquals(loaded, null) then
+        invalidOp $"Invalid weapon data file: {path}"
+    else
+        loaded
+
+let private loadedWeapons : Lazy<WeaponCollection> = lazy (loadWeapons ())
 
 let appSettings () : AppSettings = loadedSettings.Value
 
@@ -108,6 +141,9 @@ let windowSettings () : WindowSettings =
 let combatSettings () : CombatSettings =
     (appSettings ()).Combat
 
+let spawnSettings () : SpawnSettings =
+    (appSettings ()).Spawn
+
 let defaultFontSize () : IFont.Sizes =
     match (windowSettings ()).DefaultFontSize.Trim().ToLowerInvariant() with
     | "quarter" -> IFont.Sizes.Quarter
@@ -120,3 +156,10 @@ let defaultFontSize () : IFont.Sizes =
 
 let monsterTemplates () : MonsterTemplate list =
     (loadedMonsters.Value).Monsters
+
+let defaultWeaponTemplate () : WeaponTemplate =
+    match (loadedWeapons.Value).Weapons with
+    | weapon :: _ ->
+        weapon
+    | [] ->
+        invalidOp "Data/Weapons.json must define at least one weapon."

@@ -1,6 +1,5 @@
 module Spelunk.Overlay
 
-open Spelunk.Config
 open Spelunk.Model
 open Spelunk.Application
 
@@ -38,7 +37,7 @@ let private monsterAt point state =
 let private targetInRange target state =
     let dx = target.X - state.Player.Position.X
     let dy = target.Y - state.Player.Position.Y
-    max (abs dx) (abs dy) <= (combatSettings ()).TargetRange
+    max (abs dx) (abs dy) <= state.PlayerWeapon.Range
 
 let private describePoint point state =
     if point = state.Player.Position then
@@ -84,11 +83,11 @@ let overlayViewModel session =
         let targetText =
             match monsterAt cursor session.State with
             | Some monster when targetInRange cursor session.State ->
-                sprintf "Target locked: %s at (%d,%d)." monster.Name cursor.X cursor.Y
+                sprintf "%s ready: %s at (%d,%d)." session.State.PlayerWeapon.Name monster.Name cursor.X cursor.Y
             | Some monster ->
-                sprintf "%s is out of range." monster.Name
+                sprintf "%s is out of range for %s." monster.Name session.State.PlayerWeapon.Name
             | None ->
-                sprintf "No target at (%d,%d)." cursor.X cursor.Y
+                sprintf "Aim %s at (%d,%d)." session.State.PlayerWeapon.Name cursor.X cursor.Y
 
         Some
             { Cursor =
@@ -112,3 +111,13 @@ let overlayViewModel session =
                     { Style = CenterDialog
                       Title = "INVENTORY"
                       Lines = inventoryLines () } }
+    | QuitConfirm ->
+        Some
+            { Cursor = None
+              Panel =
+                Some
+                    { Style = CenterDialog
+                      Title = "QUIT?"
+                      Lines =
+                        [ "Press Enter to quit."
+                          "Press Esc to stay." ] } }

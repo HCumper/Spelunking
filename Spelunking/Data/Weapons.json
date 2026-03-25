@@ -1,0 +1,10 @@
+{
+  "Weapons": [
+    {
+      "Name": "Rusty raygun",
+      "Range": 8,
+      "Damage": 2,
+      "Ammo": null
+    }
+  ]
+}

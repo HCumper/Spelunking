@@ -10,6 +10,7 @@ type Modal =
     | LookMode of cursor: Position
     | TargetMode of cursor: Position
     | InventoryMode
+    | QuitConfirm
 
 type Session =
     { State: GameState
@@ -40,6 +41,7 @@ let private outputEvents previousSession nextSession =
         | NoModal, LookMode _
         | NoModal, TargetMode _
         | NoModal, InventoryMode -> true
+        | NoModal, QuitConfirm -> true
         | _ -> false
 
     let closedModal =
@@ -47,6 +49,7 @@ let private outputEvents previousSession nextSession =
         | LookMode _, NoModal
         | TargetMode _, NoModal
         | InventoryMode, NoModal -> true
+        | QuitConfirm, NoModal -> true
         | _ -> false
 
     combine previousSession.State.Messages nextSession.State.Messages openedModal closedModal
@@ -59,13 +62,17 @@ let normalizeIntent session intent =
 let private addMessage message state =
     { state with Messages = message :: state.Messages |> List.truncate 6 }
 
+let private targetInRange target state =
+    let dx = target.X - state.Player.Position.X
+    let dy = target.Y - state.Player.Position.Y
+    max (abs dx) (abs dy) <= state.PlayerWeapon.Range
+
 let private moveCursor mapWidth mapHeight dx dy cursor =
     { X = max 0 (min (mapWidth - 1) (cursor.X + dx))
       Y = max 0 (min (mapHeight - 1) (cursor.Y + dy)) }
 
 let applyIntent intent session : Transition =
     match intent with
-    | Quit -> { NextSession = None; Events = [] }
     | Ignore -> { NextSession = Some session; Events = [] }
     | _ ->
         let mapWidth = session.State.Map.Width
@@ -73,6 +80,13 @@ let applyIntent intent session : Transition =
 
         let nextSession =
             match session.Modal, intent with
+            | NoModal, Quit ->
+                { session with Modal = QuitConfirm }
+            | QuitConfirm, Confirm ->
+                session
+            | QuitConfirm, Cancel
+            | QuitConfirm, Quit ->
+                { session with Modal = NoModal }
             | NoModal, Act command ->
                 { session with State = update command session.State }
             | NoModal, OpenLook ->
@@ -90,17 +104,12 @@ let applyIntent intent session : Transition =
                 { session with Modal = TargetMode(moveCursor mapWidth mapHeight dx dy cursor) }
             | TargetMode cursor, Confirm ->
                 let nextState =
-                    let dx = cursor.X - session.State.Player.Position.X
-                    let dy = cursor.Y - session.State.Player.Position.Y
-                    let inRange = max (abs dx) (abs dy) <= (combatSettings ()).TargetRange
-
-                    match session.State.Monsters |> List.tryFind (fun monster -> monster.Position = cursor) with
-                    | Some monster when inRange ->
-                        addMessage (sprintf "You line up a shot on the %s." monster.Name) session.State
-                    | Some monster ->
-                        addMessage (sprintf "The %s is out of range." monster.Name) session.State
-                    | None ->
-                        addMessage "No target there." session.State
+                    if targetInRange cursor session.State then
+                        update (FireAt cursor) session.State
+                    else
+                        addMessage
+                            (sprintf "%s cannot reach that far." session.State.PlayerWeapon.Name)
+                            session.State
 
                 { State = nextState; Modal = NoModal }
             | TargetMode _, Cancel ->
@@ -111,5 +120,13 @@ let applyIntent intent session : Transition =
             | _, _ ->
                 session
 
-        { NextSession = Some nextSession
-          Events = outputEvents session nextSession }
+        let nextSessionOption =
+            match session.Modal, intent with
+            | QuitConfirm, Confirm -> None
+            | _ -> Some nextSession
+
+        { NextSession = nextSessionOption
+          Events =
+            match nextSessionOption with
+            | Some resolved -> outputEvents session resolved
+            | None -> [] }

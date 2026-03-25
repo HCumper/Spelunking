@@ -21,6 +21,8 @@ let private classifyMessage (message: string) =
         [ Speak message; PlaySound AttackKill ]
     elif message.StartsWith("You hit") then
         [ Speak message; PlaySound AttackHit ]
+    elif message.StartsWith("You shoot") || message.StartsWith("You blast") then
+        [ Speak message; PlaySound AttackHit ]
     elif message.StartsWith("You move") then
         [ Speak message; PlaySound MoveStep ]
     elif message.StartsWith("You wait") then
