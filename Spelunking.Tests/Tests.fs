@@ -42,7 +42,7 @@ let private state width height =
     { Depth = 1
       TurnCount = 0
       Map = dungeon
-      Player = actor 0 "scavenger" 1 1 10 10 10 10 0 '@'
+      Player = actor 0 "scavenger" 1 1 10 10 100 100 0 '@'
       PlayerWeapon = weapon "Rusty raygun" 8 2 None
       Monsters = []
       VisibleTiles = Array2D.create height width false
@@ -86,10 +86,10 @@ let private assertStateEqual actual expected =
 
 [<Fact>]
 let ``damageFor maps strength bands to whole-point damage`` () =
-    let weak = actor 1 "weak" 0 0 5 5 10 1 0 'w'
-    let baseline = actor 2 "baseline" 0 0 5 5 10 10 0 'b'
-    let strong = actor 3 "strong" 0 0 5 5 10 11 0 's'
-    let elite = actor 4 "elite" 0 0 5 5 10 20 0 'e'
+    let weak = actor 1 "weak" 0 0 5 5 100 1 0 'w'
+    let baseline = actor 2 "baseline" 0 0 5 5 100 100 0 'b'
+    let strong = actor 3 "strong" 0 0 5 5 100 101 0 's'
+    let elite = actor 4 "elite" 0 0 5 5 100 200 0 'e'
 
     damageFor weak |> should equal 1
     damageFor baseline |> should equal 1
@@ -101,8 +101,8 @@ let ``save and load round-trip game state and history`` () =
     let original =
         { state 4 4 with
             TurnCount = 7
-            Player = actor 0 "scavenger" 2 1 8 10 10 10 0 '@'
-            Monsters = [ actor 1 "Cyberman" 3 3 2 3 5 7 4 'C' ]
+            Player = actor 0 "scavenger" 2 1 8 10 100 100 0 '@'
+            Monsters = [ actor 1 "Cyberman" 3 3 2 3 50 70 40 'C' ]
             Messages = [ "You shoot the Cyberman."; "The Cyberman hits you." ] }
 
     let original =
@@ -171,7 +171,7 @@ let ``computeVisibility blocks line of sight through walls and retains explored 
     let initial =
         { state 5 3 with
             Map = dungeon
-            Player = actor 0 "scavenger" 0 1 10 10 10 10 0 '@'
+            Player = actor 0 "scavenger" 0 1 10 10 100 100 0 '@'
             ExploredTiles =
                 array2D [ [ false; false; false; false; false ]
                           [ false; true; false; false; true ]
@@ -217,8 +217,8 @@ let ``load game intent uses the services boundary`` () =
 
 [<Fact>]
 let ``melee kill grants player the monster max hp boost`` () =
-    let injuredPlayer = actor 0 "scavenger" 1 1 8 10 10 10 0 '@'
-    let target = actor 1 "Cyberman" 2 1 1 3 5 7 0 'C'
+    let injuredPlayer = actor 0 "scavenger" 1 1 8 10 100 100 0 '@'
+    let target = actor 1 "Cyberman" 2 1 1 3 50 70 0 'C'
     let game =
         { state 4 4 with
             Player = injuredPlayer
@@ -234,11 +234,11 @@ let ``melee kill grants player the monster max hp boost`` () =
 let ``ranged attack stops at walls and does not hit monsters beyond them`` () =
     let dungeon = map 5 1 Floor
     dungeon.Tiles[0, 2] <- Wall
-    let target = actor 1 "Dalek" 4 0 5 5 5 7 0 'D'
+    let target = actor 1 "Dalek" 4 0 5 5 50 70 0 'D'
     let game =
         { state 5 1 with
             Map = dungeon
-            Player = actor 0 "scavenger" 0 0 10 10 10 10 0 '@'
+            Player = actor 0 "scavenger" 0 0 10 10 100 100 0 '@'
             PlayerWeapon = weapon "Rusty raygun" 8 2 (Some 3)
             Monsters = [ target ] }
 
@@ -250,10 +250,10 @@ let ``ranged attack stops at walls and does not hit monsters beyond them`` () =
 
 [<Fact>]
 let ``ranged attack consumes ammo on hit`` () =
-    let target = actor 1 "Dalek" 3 0 5 5 5 7 0 'D'
+    let target = actor 1 "Dalek" 3 0 5 5 50 70 0 'D'
     let game =
         { state 5 1 with
-            Player = actor 0 "scavenger" 0 0 10 10 10 10 0 '@'
+            Player = actor 0 "scavenger" 0 0 10 10 100 100 0 '@'
             PlayerWeapon = weapon "Rusty raygun" 8 2 (Some 2)
             Monsters = [ target ] }
 
@@ -264,11 +264,11 @@ let ``ranged attack consumes ammo on hit`` () =
     next.Messages.Head |> should equal "You shoot the Dalek."
 
 [<Fact>]
-let ``monster speed twenty attacks twice in one turn when adjacent`` () =
-    let fastMonster = actor 1 "Dalek" 2 1 5 5 20 10 0 'D'
+let ``monster speed two hundred attacks twice in one turn when adjacent`` () =
+    let fastMonster = actor 1 "Dalek" 2 1 5 5 200 100 0 'D'
     let game =
         { state 4 3 with
-            Player = actor 0 "scavenger" 1 1 10 10 10 10 0 '@'
+            Player = actor 0 "scavenger" 1 1 10 10 100 100 0 '@'
             Monsters = [ fastMonster ] }
 
     let next = runMonsterTurn game
@@ -277,18 +277,18 @@ let ``monster speed twenty attacks twice in one turn when adjacent`` () =
     next.Messages |> List.filter (fun message -> message = "The Dalek hits you.") |> List.length |> should equal 2
 
 [<Fact>]
-let ``monster speed five acts every other turn`` () =
-    let slowMonster = actor 1 "Cyberman" 2 1 5 5 5 10 0 'C'
+let ``monster speed fifty acts every other turn`` () =
+    let slowMonster = actor 1 "Cyberman" 2 1 5 5 50 100 0 'C'
     let game =
         { state 4 3 with
-            Player = actor 0 "scavenger" 1 1 10 10 10 10 0 '@'
+            Player = actor 0 "scavenger" 1 1 10 10 100 100 0 '@'
             Monsters = [ slowMonster ] }
 
     let afterOneTurn = runMonsterTurn game
     let afterTwoTurns = runMonsterTurn afterOneTurn
 
     afterOneTurn.Player.Hp |> should equal 10
-    afterOneTurn.Monsters.Head.Energy |> should equal 5
+    afterOneTurn.Monsters.Head.Energy |> should equal 50
     afterTwoTurns.Player.Hp |> should equal 9
 
 [<Fact>]
@@ -315,11 +315,11 @@ let ``load game failure reports an error message`` () =
 
 [<Fact>]
 let ``target mode confirm out of range does not fire`` () =
-    let distantMonster = actor 1 "Dalek" 8 1 5 5 5 7 0 'D'
+    let distantMonster = actor 1 "Dalek" 8 1 5 5 50 70 0 'D'
     let targetSession =
         { State =
             { state 10 3 with
-                Player = actor 0 "scavenger" 1 1 10 10 10 10 0 '@'
+                Player = actor 0 "scavenger" 1 1 10 10 100 100 0 '@'
                 PlayerWeapon = weapon "Rusty raygun" 3 2 None
                 Monsters = [ distantMonster ] }
           Modal = TargetMode { X = 8; Y = 1 }

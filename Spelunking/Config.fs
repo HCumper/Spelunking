@@ -45,7 +45,15 @@ type MonsterTemplate =
       MinDepth: int
       MaxDepth: int
       Speed: int
-      Strength: int }
+      Strength: int
+      Accuracy: int
+      VisionRadius: int
+      Weapon: string option
+      Behavior: string
+      OnDeathEffect: string option
+      Unique: bool
+      Description: string
+      SpeechCue: string option }
 
 type WeaponTemplate =
     { Name: string
@@ -84,13 +92,29 @@ let private loadedSettings : Lazy<AppSettings> = lazy (loadSettings ())
 let private parseMonsterCsvLine (line: string) : MonsterTemplate =
     let columns = line.Split(',', StringSplitOptions.TrimEntries)
 
-    if columns.Length <> 8 then
+    if columns.Length <> 16 then
         invalidOp $"Invalid monster CSV row: '{line}'"
 
     let parseInt fieldName (value: string) =
         match Int32.TryParse value with
         | true, parsed -> parsed
         | false, _ -> invalidOp $"Invalid integer value '{value}' for monster field '{fieldName}'."
+
+    let parseOptionalString (value: string) =
+        if String.IsNullOrWhiteSpace value then None else Some value
+
+    let parseBool fieldName (value: string) =
+        match value.Trim().ToLowerInvariant() with
+        | ""
+        | "false"
+        | "no"
+        | "n"
+        | "0" -> false
+        | "true"
+        | "yes"
+        | "y"
+        | "1" -> true
+        | _ -> invalidOp $"Invalid boolean value '{value}' for monster field '{fieldName}'."
 
     { Name = columns[0]
       MaxHp = parseInt "MaxHp" columns[1]
@@ -99,7 +123,15 @@ let private parseMonsterCsvLine (line: string) : MonsterTemplate =
       MinDepth = parseInt "MinDepth" columns[4]
       MaxDepth = parseInt "MaxDepth" columns[5]
       Speed = parseInt "Speed" columns[6]
-      Strength = parseInt "Strength" columns[7] }
+      Strength = parseInt "Strength" columns[7]
+      Accuracy = parseInt "Accuracy" columns[8]
+      VisionRadius = parseInt "VisionRadius" columns[9]
+      Weapon = parseOptionalString columns[10]
+      Behavior = columns[11]
+      OnDeathEffect = parseOptionalString columns[12]
+      Unique = parseBool "Unique" columns[13]
+      Description = columns[14]
+      SpeechCue = parseOptionalString columns[15] }
 
 let private loadMonsters () : MonsterTemplate list =
     let path = Path.Combine(AppContext.BaseDirectory, "Data", "Monsters.csv")
@@ -116,7 +148,8 @@ let private loadMonsters () : MonsterTemplate list =
     match lines with
     | [] -> []
     | header :: rows ->
-        let expectedHeader = "Name,MaxHp,Glyph,Frequency,MinDepth,MaxDepth,Speed,Strength"
+        let expectedHeader =
+            "Name,MaxHp,Glyph,Frequency,MinDepth,MaxDepth,Speed,Strength,Accuracy,VisionRadius,Weapon,Behavior,OnDeathEffect,Unique,Description,SpeechCue"
 
         if not (header.Equals(expectedHeader, StringComparison.OrdinalIgnoreCase)) then
             invalidOp $"Invalid monster CSV header. Expected '{expectedHeader}'."

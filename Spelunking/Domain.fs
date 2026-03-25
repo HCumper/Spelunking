@@ -72,8 +72,8 @@ let initialState () =
           Position = spawnPoint
           Hp = 10
           MaxHp = 10
-          Speed = 10
-          Strength = 10
+          Speed = 100
+          Strength = 100
           Energy = 0
           Glyph = '@' }
 

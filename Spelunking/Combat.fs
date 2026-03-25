@@ -3,13 +3,13 @@ module Spelunk.Combat
 
 open Spelunk.Model
 
-let private actionThreshold = 10
+let private actionThreshold = 100
 
 let clampHp actor hp =
     { actor with Hp = max 0 (min actor.MaxHp hp) }
 
 let damageFor attacker =
-    // Strength 10 corresponds to baseline 1 damage; larger values scale upward in whole points.
+    // Strength 100 corresponds to baseline 1 damage; larger values scale upward in whole points.
     max 1 ((attacker.Strength + actionThreshold - 1) / actionThreshold)
 
 let attack attacker target =

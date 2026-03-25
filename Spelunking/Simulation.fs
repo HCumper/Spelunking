@@ -17,7 +17,7 @@ let isWalkable tile =
 let actorAt point actors =
     actors |> List.tryFind (fun actor -> actor.Position = point)
 
-let private actionThreshold = 10
+let private actionThreshold = 100
 
 let tryMoveActor map actors actor dx dy =
     let destination =
@@ -132,10 +132,7 @@ let private updateMonster state monster =
     let dy = playerPos.Y - monster.Position.Y
 
     let stepX, stepY =
-        if abs dx >= abs dy then
-            compare dx 0, 0
-        else
-            0, compare dy 0
+        compare dx 0, compare dy 0
 
     let destination =
         { X = monster.Position.X + stepX
@@ -159,7 +156,7 @@ let private runMonsterActions state monster =
         if currentState.Player.Hp <= 0 || currentMonster.Energy < actionThreshold then
             currentState, currentMonster, notes
         else
-            // Monsters spend energy in 10-point chunks, so speed below or above 10 acts less or more often than the player.
+            // Monsters spend energy in 100-point chunks, so speed below or above 100 acts less or more often than the player.
             let actingMonster = { currentMonster with Energy = currentMonster.Energy - actionThreshold }
             let monsterState =
                 { currentState with
