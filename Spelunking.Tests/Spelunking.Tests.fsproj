@@ -25,13 +25,13 @@
         <Content Include="..\Spelunking\Appsettings.json" Link="Appsettings.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
-        <Content Include="..\Spelunking\Data\Monsters.json" Link="Data\Monsters.json">
+        <Content Include="..\Spelunking\Data\Monsters.csv" Link="Data\Monsters.csv">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-            <TargetPath>Data\Monsters.json</TargetPath>
+            <TargetPath>Data\Monsters.csv</TargetPath>
         </Content>
-        <Content Include="..\Spelunking\Data\Weapons.json" Link="Data\Weapons.json">
+        <Content Include="..\Spelunking\Data\Weapons.csv" Link="Data\Weapons.csv">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-            <TargetPath>Data\Weapons.json</TargetPath>
+            <TargetPath>Data\Weapons.csv</TargetPath>
         </Content>
     </ItemGroup>
 

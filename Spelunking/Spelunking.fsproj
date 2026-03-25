@@ -34,13 +34,13 @@
         <Content Include="Appsettings.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
-        <Content Include="Data\Monsters.json">
+        <Content Include="Data\Monsters.csv">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-            <TargetPath>Data\Monsters.json</TargetPath>
+            <TargetPath>Data\Monsters.csv</TargetPath>
         </Content>
-        <Content Include="Data\Weapons.json">
+        <Content Include="Data\Weapons.csv">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-            <TargetPath>Data\Weapons.json</TargetPath>
+            <TargetPath>Data\Weapons.csv</TargetPath>
         </Content>
     </ItemGroup>
 

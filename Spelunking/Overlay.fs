@@ -79,7 +79,7 @@ let overlayViewModel session =
                       Title = "LOOK MODE"
                       Lines =
                         [ describePoint cursor session.State
-                          "Move cursor with arrows/WASD. Enter or Esc closes." ] } }
+                          "Choose a direction. First visible feature is shown. Enter or Esc closes." ] } }
     | TargetMode cursor ->
         let targetText =
             match monsterAt cursor session.State with

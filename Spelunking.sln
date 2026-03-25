@@ -4,6 +4,11 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Spelunking", "Spelunking\Sp
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Spelunking.Tests", "Spelunking.Tests\Spelunking.Tests.fsproj", "{CB91D5D3-C2F8-42F3-BB72-43C3302E9C74}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{127AD61A-2FF7-41E2-B3BC-F9525629CB4A}"
+	ProjectSection(SolutionItems) = preProject
+		README.md = README.md
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU

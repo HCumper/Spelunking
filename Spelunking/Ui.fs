@@ -123,7 +123,7 @@ let private keyTable : (Key * Keys list) list =
     [ QuitKey, [ Keys.Q ]
       CancelKey, [ Keys.Escape ]
       ConfirmKey, [ Keys.Enter ]
-      LookKey, [ Keys.X ]
+      LookKey, [ Keys.L ]
       TargetKey, [ Keys.F ]
       InventoryKey, [ Keys.I ]
       TimeShifterKey, [ Keys.T ]
@@ -217,7 +217,7 @@ type StatsPanel(windowHeight) =
         writeText this 2 3 Color.White (sprintf "Depth %d" session.State.Depth)
         writeText this 2 5 Color.White (sprintf "HP %d/%d" session.State.Player.Hp session.State.Player.MaxHp)
         writeText this 2 7 Color.LightGray (sprintf "View %d,%d" camera.X camera.Y)
-        writeText this 2 14 Color.LightGray "Look: X"
+        writeText this 2 14 Color.LightGray "Look: L"
         writeText this 2 15 Color.LightGray "Target: F"
         writeText this 2 16 Color.LightGray "Inv: I"
         writeText this 2 17 Color.LightGray "Shift: T"

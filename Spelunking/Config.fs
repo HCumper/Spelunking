@@ -1,4 +1,4 @@
-(* Loads application settings and game content data from JSON files and maps them into typed records. *)
+(* Loads application settings plus CSV and JSON game data files into typed records. *)
 module Spelunk.Config
 
 open System
@@ -60,12 +60,6 @@ type AppSettings =
       Spawn: SpawnSettings
       Window: WindowSettings }
 
-type MonsterCollection =
-    { Monsters: MonsterTemplate list }
-
-type WeaponCollection =
-    { Weapons: WeaponTemplate list }
-
 let private options =
     let settings = JsonSerializerOptions(PropertyNameCaseInsensitive = true)
     settings.ReadCommentHandling <- JsonCommentHandling.Skip
@@ -87,37 +81,95 @@ let private loadSettings () : AppSettings =
 
 let private loadedSettings : Lazy<AppSettings> = lazy (loadSettings ())
 
-let private loadMonsters () : MonsterCollection =
-    let path = Path.Combine(AppContext.BaseDirectory, "Data", "Monsters.json")
+let private parseMonsterCsvLine (line: string) : MonsterTemplate =
+    let columns = line.Split(',', StringSplitOptions.TrimEntries)
+
+    if columns.Length <> 8 then
+        invalidOp $"Invalid monster CSV row: '{line}'"
+
+    let parseInt fieldName (value: string) =
+        match Int32.TryParse value with
+        | true, parsed -> parsed
+        | false, _ -> invalidOp $"Invalid integer value '{value}' for monster field '{fieldName}'."
+
+    { Name = columns[0]
+      MaxHp = parseInt "MaxHp" columns[1]
+      Glyph = columns[2]
+      Frequency = parseInt "Frequency" columns[3]
+      MinDepth = parseInt "MinDepth" columns[4]
+      MaxDepth = parseInt "MaxDepth" columns[5]
+      Speed = parseInt "Speed" columns[6]
+      Strength = parseInt "Strength" columns[7] }
+
+let private loadMonsters () : MonsterTemplate list =
+    let path = Path.Combine(AppContext.BaseDirectory, "Data", "Monsters.csv")
 
     if not (File.Exists path) then
         invalidOp $"Missing monster data file: {path}"
 
-    let json = File.ReadAllText path
-    let loaded: MonsterCollection = JsonSerializer.Deserialize<MonsterCollection>(json, options)
+    let lines =
+        File.ReadAllLines path
+        |> Array.toList
+        |> List.map (fun line -> line.Trim())
+        |> List.filter (fun line -> line <> "" && not (line.StartsWith("#")))
 
-    if obj.ReferenceEquals(loaded, null) then
-        invalidOp $"Invalid monster data file: {path}"
-    else
-        loaded
+    match lines with
+    | [] -> []
+    | header :: rows ->
+        let expectedHeader = "Name,MaxHp,Glyph,Frequency,MinDepth,MaxDepth,Speed,Strength"
 
-let private loadedMonsters : Lazy<MonsterCollection> = lazy (loadMonsters ())
+        if not (header.Equals(expectedHeader, StringComparison.OrdinalIgnoreCase)) then
+            invalidOp $"Invalid monster CSV header. Expected '{expectedHeader}'."
 
-let private loadWeapons () : WeaponCollection =
-    let path = Path.Combine(AppContext.BaseDirectory, "Data", "Weapons.json")
+        rows |> List.map parseMonsterCsvLine
+
+let private loadedMonsters : Lazy<MonsterTemplate list> = lazy (loadMonsters ())
+
+let private parseWeaponCsvLine (line: string) : WeaponTemplate =
+    let columns = line.Split(',', StringSplitOptions.TrimEntries)
+
+    if columns.Length <> 4 then
+        invalidOp $"Invalid weapon CSV row: '{line}'"
+
+    let parseInt fieldName (value: string) =
+        match Int32.TryParse value with
+        | true, parsed -> parsed
+        | false, _ -> invalidOp $"Invalid integer value '{value}' for weapon field '{fieldName}'."
+
+    let parseAmmo (value: string) =
+        if String.IsNullOrWhiteSpace value then
+            None
+        else
+            Some(parseInt "Ammo" value)
+
+    { Name = columns[0]
+      Range = parseInt "Range" columns[1]
+      Damage = parseInt "Damage" columns[2]
+      Ammo = parseAmmo columns[3] }
+
+let private loadWeapons () : WeaponTemplate list =
+    let path = Path.Combine(AppContext.BaseDirectory, "Data", "Weapons.csv")
 
     if not (File.Exists path) then
         invalidOp $"Missing weapon data file: {path}"
 
-    let json = File.ReadAllText path
-    let loaded: WeaponCollection = JsonSerializer.Deserialize<WeaponCollection>(json, options)
+    let lines =
+        File.ReadAllLines path
+        |> Array.toList
+        |> List.map (fun line -> line.Trim())
+        |> List.filter (fun line -> line <> "" && not (line.StartsWith("#")))
 
-    if obj.ReferenceEquals(loaded, null) then
-        invalidOp $"Invalid weapon data file: {path}"
-    else
-        loaded
+    match lines with
+    | [] -> []
+    | header :: rows ->
+        let expectedHeader = "Name,Range,Damage,Ammo"
 
-let private loadedWeapons : Lazy<WeaponCollection> = lazy (loadWeapons ())
+        if not (header.Equals(expectedHeader, StringComparison.OrdinalIgnoreCase)) then
+            invalidOp $"Invalid weapon CSV header. Expected '{expectedHeader}'."
+
+        rows |> List.map parseWeaponCsvLine
+
+let private loadedWeapons : Lazy<WeaponTemplate list> = lazy (loadWeapons ())
 
 let appSettings () : AppSettings = loadedSettings.Value
 
@@ -156,11 +208,11 @@ let defaultFontSize () : IFont.Sizes =
     | value -> invalidOp $"Unsupported Window:DefaultFontSize value '{value}'."
 
 let monsterTemplates () : MonsterTemplate list =
-    (loadedMonsters.Value).Monsters
+    loadedMonsters.Value
 
 let defaultWeaponTemplate () : WeaponTemplate =
-    match (loadedWeapons.Value).Weapons with
+    match loadedWeapons.Value with
     | weapon :: _ ->
         weapon
     | [] ->
-        invalidOp "Data/Weapons.json must define at least one weapon."
+        invalidOp "Data/Weapons.csv must define at least one weapon."

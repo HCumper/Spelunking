@@ -39,6 +39,43 @@ let private moveCursor mapWidth mapHeight dx dy cursor =
     { X = max 0 (min (mapWidth - 1) (cursor.X + dx))
       Y = max 0 (min (mapHeight - 1) (cursor.Y + dy)) }
 
+let private monsterAt point state =
+    state.Monsters |> List.tryFind (fun monster -> monster.Position = point)
+
+let private isInterestingTile point state =
+    match monsterAt point state with
+    | Some _ -> true
+    | None ->
+        match state.Map.Tiles[point.Y, point.X] with
+        | Floor -> false
+        | Wall
+        | StairsDown -> true
+
+let private firstVisibleInterestingTileInDirection dx dy state =
+    let origin = state.Player.Position
+
+    let rec walk point =
+        let nextPoint =
+            { X = point.X + dx
+              Y = point.Y + dy }
+
+        let inBounds =
+            nextPoint.X >= 0
+            && nextPoint.X < state.Map.Width
+            && nextPoint.Y >= 0
+            && nextPoint.Y < state.Map.Height
+
+        if not inBounds then
+            None
+        elif not state.VisibleTiles[nextPoint.Y, nextPoint.X] then
+            None
+        elif isInterestingTile nextPoint state then
+            Some nextPoint
+        else
+            walk nextPoint
+
+    walk origin
+
 let private applyAction command session =
     let withHistory = SessionHistory.recordAction command session
 
@@ -104,7 +141,16 @@ let applyIntent services intent session : Transition =
             | NoModal, OpenInventory ->
                 { session with Modal = InventoryMode }
             | LookMode cursor, MoveCursor (dx, dy) ->
-                { session with Modal = LookMode(moveCursor mapWidth mapHeight dx dy cursor) }
+                let nextSession =
+                    match firstVisibleInterestingTileInDirection dx dy session.State with
+                    | Some nextCursor ->
+                        { session with Modal = LookMode nextCursor }
+                    | None ->
+                        { session with
+                            State = addMessage "You can see nothing there." session.State
+                            Modal = LookMode cursor }
+
+                nextSession
             | LookMode _, Confirm
             | LookMode _, Cancel ->
                 { session with Modal = NoModal }
