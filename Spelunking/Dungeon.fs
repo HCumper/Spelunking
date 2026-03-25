@@ -80,7 +80,7 @@ let private randomRoom (random: Random) config =
     let left = random.Next(1, config.MapWidth - width)
     let top = random.Next(1, config.MapHeight - height)
 
-    { Left = left
+    { Left = left 
       Top = top
       Width = width
       Height = height }
