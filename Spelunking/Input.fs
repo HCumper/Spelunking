@@ -19,6 +19,11 @@ type Key =
     | LookKey
     | TargetKey
     | InventoryKey
+    | TimeShifterKey
+    | SaveKey
+    | LoadKey
+    | DigitKey of int
+    | BackspaceKey
     | QuitKey
 
 type Binding =
@@ -33,6 +38,20 @@ let defaultBindings : Binding list =
       { Key = LookKey; Intent = OpenLook }
       { Key = TargetKey; Intent = OpenTarget }
       { Key = InventoryKey; Intent = OpenInventory }
+      { Key = TimeShifterKey; Intent = UseTimeShifter }
+      { Key = SaveKey; Intent = SaveGame }
+      { Key = LoadKey; Intent = LoadGame }
+      { Key = BackspaceKey; Intent = EraseDigit }
+      { Key = DigitKey 0; Intent = EnterDigit 0 }
+      { Key = DigitKey 1; Intent = EnterDigit 1 }
+      { Key = DigitKey 2; Intent = EnterDigit 2 }
+      { Key = DigitKey 3; Intent = EnterDigit 3 }
+      { Key = DigitKey 4; Intent = EnterDigit 4 }
+      { Key = DigitKey 5; Intent = EnterDigit 5 }
+      { Key = DigitKey 6; Intent = EnterDigit 6 }
+      { Key = DigitKey 7; Intent = EnterDigit 7 }
+      { Key = DigitKey 8; Intent = EnterDigit 8 }
+      { Key = DigitKey 9; Intent = EnterDigit 9 }
       { Key = UpLeft; Intent = MoveCursor(-1, -1) }
       { Key = Up; Intent = MoveCursor(0, -1) }
       { Key = UpRight; Intent = MoveCursor(1, -1) }

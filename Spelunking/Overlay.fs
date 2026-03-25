@@ -112,6 +112,17 @@ let overlayViewModel session =
                     { Style = CenterDialog
                       Title = "INVENTORY"
                       Lines = inventoryLines () } }
+    | TimeShiftPrompt turnsText ->
+        Some
+            { Cursor = None
+              Panel =
+                Some
+                    { Style = CenterDialog
+                      Title = "TIME SHIFTER"
+                      Lines =
+                        [ sprintf "Turns to rewind (1-10): %s" (if turnsText = "" then "_" else turnsText)
+                          sprintf "Available: %d" (min 10 session.History.Length)
+                          "Type digits, Enter confirms, Esc closes." ] } }
     | QuitConfirm ->
         Some
             { Cursor = None

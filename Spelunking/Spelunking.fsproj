@@ -15,6 +15,7 @@
         <Compile Include="Dungeon.fs" />
         <Compile Include="Config.fs" />
         <Compile Include="Model.fs" />
+        <Compile Include="Save.fs" />
         <Compile Include="Visibility.fs" />
         <Compile Include="World.fs" />
         <Compile Include="Simulation.fs" />
