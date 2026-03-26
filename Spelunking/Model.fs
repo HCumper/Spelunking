@@ -17,7 +17,8 @@ type Actor =
       Speed: int
       Strength: int
       Energy: int
-      Glyph: char }
+      Glyph: char
+      SpeechCue: string option }
 
 type Weapon =
     { Name: string

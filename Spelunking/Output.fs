@@ -14,30 +14,29 @@ type SoundCue =
     | TargetReject
 
 type OutputEvent =
-    | Speak of string
     | PlaySound of SoundCue
 
 let private classifyMessage (message: string) =
     if message.StartsWith("You kill") then
-        [ Speak message; PlaySound AttackKill ]
+        [ PlaySound AttackKill ]
     elif message.StartsWith("You hit") then
-        [ Speak message; PlaySound AttackHit ]
+        [ PlaySound AttackHit ]
     elif message.StartsWith("You shoot") || message.StartsWith("You blast") then
-        [ Speak message; PlaySound AttackHit ]
+        [ PlaySound AttackHit ]
     elif message.StartsWith("You move") then
-        [ Speak message; PlaySound MoveStep ]
+        [ PlaySound MoveStep ]
     elif message.StartsWith("You wait") then
-        [ Speak message; PlaySound WaitTurn ]
+        [ PlaySound WaitTurn ]
     elif message.StartsWith("The ") && message.Contains("hits you") then
-        [ Speak message; PlaySound PlayerHurt ]
+        [ PlaySound PlayerHurt ]
     elif message.StartsWith("No target")
          || message.Contains("out of range")
          || message.StartsWith("The rock wall")
          || message.StartsWith("You bump")
          || message.StartsWith("Something is already there") then
-        [ Speak message; PlaySound TargetReject ]
+        [ PlaySound TargetReject ]
     else
-        [ Speak message ]
+        []
 
 let newMessages previousMessages nextMessages =
     let previousMessages = previousMessages |> Set.ofList

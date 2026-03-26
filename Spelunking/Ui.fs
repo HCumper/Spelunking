@@ -100,6 +100,11 @@ let private clearSurface (surface: ScreenSurface) =
         for x in 0 .. surface.Surface.Width - 1 do
             paintCell surface x y ' ' Color.White Color.Black
 
+let private clearOverlaySurface (surface: ScreenSurface) =
+    for y in 0 .. surface.Surface.Height - 1 do
+        for x in 0 .. surface.Surface.Width - 1 do
+            paintCell surface x y ' ' Color.Transparent Color.Transparent
+
 let private writeText (surface: ScreenSurface) x y foreground text =
     text
     |> Seq.truncate (max 0 (surface.Surface.Width - x))
@@ -279,7 +284,7 @@ type OverlayPanelSurface(viewportWidth, viewportHeight) =
     inherit ScreenSurface(viewportWidth, viewportHeight)
 
     member this.Render(session, camera) =
-        clearSurface this
+        clearOverlaySurface this
         let width = this.Surface.Width
         let height = this.Surface.Height
 
@@ -333,6 +338,7 @@ type RootScreen(screenWidth, screenHeight) as this =
     let mutable relayout = (fun () -> ())
     let mutable requestRedraw = (fun () -> ())
     let mutable activeDrag: string option = None
+    let mutable spokenMonsterIds: Set<int> = Set.empty
     let statsPanel = new StatsPanel(screenHeight)
     let verticalDivider =
         new DividerPanel(
@@ -439,6 +445,22 @@ type RootScreen(screenWidth, screenHeight) as this =
             session <- nextSession
         | None ->
             Game.Instance.MonoGameInstance.Exit()
+
+        transition.Events
+        |> List.iter (function
+            | PlaySound _ -> ())
+
+        let newlySeenSpeakingMonsters =
+            session.State.Monsters
+            |> List.filter (fun monster ->
+                session.State.VisibleTiles[monster.Position.Y, monster.Position.X]
+                && monster.SpeechCue |> Option.isSome
+                && not (Set.contains monster.Id spokenMonsterIds))
+
+        newlySeenSpeakingMonsters
+        |> List.iter (fun monster ->
+            spokenMonsterIds <- Set.add monster.Id spokenMonsterIds
+            services.Speak monster.SpeechCue.Value)
 
         redraw ()
 

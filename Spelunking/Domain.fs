@@ -12,10 +12,10 @@ let createMap () =
 let private advanceTurn state =
     let nextTurnCount = state.TurnCount + 1
 
-    if nextTurnCount % 10 = 0 && state.Player.Hp < state.Player.MaxHp then
+    if nextTurnCount % 20 = 0 && state.Player.Hp < state.Player.MaxHp then
         { state with
             TurnCount = nextTurnCount
-            Player = { state.Player with Hp = state.Player.Hp + 1 } }
+            Player = { state.Player with Hp = min state.Player.MaxHp (state.Player.Hp + 10) } }
     else
         { state with TurnCount = nextTurnCount }
 
@@ -70,12 +70,13 @@ let initialState () =
         { Id = 0
           Name = "scavenger"
           Position = spawnPoint
-          Hp = 10
-          MaxHp = 10
+          Hp = 100
+          MaxHp = 100
           Speed = 100
           Strength = 100
           Energy = 0
-          Glyph = '@' }
+          Glyph = '@'
+          SpeechCue = None }
 
     let monsters =
         let templates = monsterTemplates ()
@@ -116,7 +117,8 @@ let initialState () =
                         match template.Glyph with
                         | null
                         | "" -> '?'
-                        | value -> value[0] }))
+                        | value -> value[0]
+                      SpeechCue = template.SpeechCue }))
 
     { Depth = depth
       TurnCount = 0

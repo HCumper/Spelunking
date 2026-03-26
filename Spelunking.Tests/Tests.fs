@@ -23,7 +23,8 @@ let private actor id name x y hp maxHp speed strength energy glyph =
       Speed = speed
       Strength = strength
       Energy = energy
-      Glyph = glyph }
+      Glyph = glyph
+      SpeechCue = None }
 
 let private weapon name range damage ammo =
     { Name = name
@@ -42,8 +43,8 @@ let private state width height =
     { Depth = 1
       TurnCount = 0
       Map = dungeon
-      Player = actor 0 "scavenger" 1 1 10 10 100 100 0 '@'
-      PlayerWeapon = weapon "Rusty raygun" 8 2 None
+      Player = actor 0 "scavenger" 1 1 100 100 100 100 0 '@'
+      PlayerWeapon = weapon "Rusty raygun" 8 20 None
       Monsters = []
       VisibleTiles = Array2D.create height width false
       ExploredTiles = Array2D.create height width false
@@ -56,19 +57,23 @@ let private session gameState =
 
 let private testServices loadedState loadedHistory =
     { SaveGame = fun _ -> ()
-      TryLoadGame = fun () -> Some(loadedState, loadedHistory) }
+      TryLoadGame = fun () -> Some(loadedState, loadedHistory)
+      Speak = fun _ -> () }
 
 let private inertServices =
     { SaveGame = fun _ -> ()
-      TryLoadGame = fun () -> None }
+      TryLoadGame = fun () -> None
+      Speak = fun _ -> () }
 
 let private failingSaveServices : Services =
     { SaveGame = fun (_: GameState * GameState list) -> raise (Exception("disk full"))
-      TryLoadGame = fun () -> None }
+      TryLoadGame = fun () -> None
+      Speak = fun _ -> () }
 
 let private failingLoadServices : Services =
     { SaveGame = fun _ -> ()
-      TryLoadGame = fun () -> raise (Exception("corrupt file")) }
+      TryLoadGame = fun () -> raise (Exception("corrupt file"))
+      Speak = fun _ -> () }
 
 let private saveFilePath () =
     Path.Combine(AppContext.BaseDirectory, "Data", "savegame.json")
@@ -91,18 +96,18 @@ let ``damageFor maps strength bands to whole-point damage`` () =
     let strong = actor 3 "strong" 0 0 5 5 100 101 0 's'
     let elite = actor 4 "elite" 0 0 5 5 100 200 0 'e'
 
-    damageFor weak |> should equal 1
-    damageFor baseline |> should equal 1
-    damageFor strong |> should equal 2
-    damageFor elite |> should equal 2
+    damageFor weak |> should equal 10
+    damageFor baseline |> should equal 10
+    damageFor strong |> should equal 20
+    damageFor elite |> should equal 20
 
 [<Fact>]
 let ``save and load round-trip game state and history`` () =
     let original =
         { state 4 4 with
             TurnCount = 7
-            Player = actor 0 "scavenger" 2 1 8 10 100 100 0 '@'
-            Monsters = [ actor 1 "Cyberman" 3 3 2 3 50 70 40 'C' ]
+            Player = actor 0 "scavenger" 2 1 80 100 100 100 0 '@'
+            Monsters = [ actor 1 "Cyberman" 3 3 20 30 50 70 40 'C' ]
             Messages = [ "You shoot the Cyberman."; "The Cyberman hits you." ] }
 
     let original =
@@ -171,7 +176,7 @@ let ``computeVisibility blocks line of sight through walls and retains explored 
     let initial =
         { state 5 3 with
             Map = dungeon
-            Player = actor 0 "scavenger" 0 1 10 10 100 100 0 '@'
+            Player = actor 0 "scavenger" 0 1 100 100 100 100 0 '@'
             ExploredTiles =
                 array2D [ [ false; false; false; false; false ]
                           [ false; true; false; false; true ]
@@ -217,8 +222,8 @@ let ``load game intent uses the services boundary`` () =
 
 [<Fact>]
 let ``melee kill grants player the monster max hp boost`` () =
-    let injuredPlayer = actor 0 "scavenger" 1 1 8 10 100 100 0 '@'
-    let target = actor 1 "Cyberman" 2 1 1 3 50 70 0 'C'
+    let injuredPlayer = actor 0 "scavenger" 1 1 80 100 100 100 0 '@'
+    let target = actor 1 "Cyberman" 2 1 10 30 50 70 0 'C'
     let game =
         { state 4 4 with
             Player = injuredPlayer
@@ -226,7 +231,7 @@ let ``melee kill grants player the monster max hp boost`` () =
 
     let next = update (Move(1, 0)) game
 
-    next.Player.Hp |> should equal 10
+    next.Player.Hp |> should equal 95
     next.Monsters |> should be Empty
     next.Messages.Head |> should equal "You kill the Cyberman."
 
@@ -234,33 +239,33 @@ let ``melee kill grants player the monster max hp boost`` () =
 let ``ranged attack stops at walls and does not hit monsters beyond them`` () =
     let dungeon = map 5 1 Floor
     dungeon.Tiles[0, 2] <- Wall
-    let target = actor 1 "Dalek" 4 0 5 5 50 70 0 'D'
+    let target = actor 1 "Dalek" 4 0 50 50 50 70 0 'D'
     let game =
         { state 5 1 with
             Map = dungeon
-            Player = actor 0 "scavenger" 0 0 10 10 100 100 0 '@'
-            PlayerWeapon = weapon "Rusty raygun" 8 2 (Some 3)
+            Player = actor 0 "scavenger" 0 0 100 100 100 100 0 '@'
+            PlayerWeapon = weapon "Rusty raygun" 8 20 (Some 3)
             Monsters = [ target ] }
 
     let next = update (FireAt { X = 4; Y = 0 }) game
 
     next.Messages.Head |> should equal "Your Rusty raygun blasts the wall."
     next.PlayerWeapon.Ammo |> should equal (Some 2)
-    next.Monsters.Head.Hp |> should equal 5
+    next.Monsters.Head.Hp |> should equal 50
 
 [<Fact>]
 let ``ranged attack consumes ammo on hit`` () =
-    let target = actor 1 "Dalek" 3 0 5 5 50 70 0 'D'
+    let target = actor 1 "Dalek" 3 0 250 250 50 70 0 'D'
     let game =
         { state 5 1 with
-            Player = actor 0 "scavenger" 0 0 10 10 100 100 0 '@'
-            PlayerWeapon = weapon "Rusty raygun" 8 2 (Some 2)
+            Player = actor 0 "scavenger" 0 0 100 100 100 100 0 '@'
+            PlayerWeapon = weapon "Rusty raygun" 8 20 (Some 2)
             Monsters = [ target ] }
 
     let next = update (FireAt { X = 3; Y = 0 }) game
 
     next.PlayerWeapon.Ammo |> should equal (Some 1)
-    next.Monsters.Head.Hp |> should equal 3
+    next.Monsters.Head.Hp |> should equal 50
     next.Messages.Head |> should equal "You shoot the Dalek."
 
 [<Fact>]
@@ -268,12 +273,12 @@ let ``monster speed two hundred attacks twice in one turn when adjacent`` () =
     let fastMonster = actor 1 "Dalek" 2 1 5 5 200 100 0 'D'
     let game =
         { state 4 3 with
-            Player = actor 0 "scavenger" 1 1 10 10 100 100 0 '@'
+            Player = actor 0 "scavenger" 1 1 100 100 100 100 0 '@'
             Monsters = [ fastMonster ] }
 
     let next = runMonsterTurn game
 
-    next.Player.Hp |> should equal 8
+    next.Player.Hp |> should equal 80
     next.Messages |> List.filter (fun message -> message = "The Dalek hits you.") |> List.length |> should equal 2
 
 [<Fact>]
@@ -281,15 +286,15 @@ let ``monster speed fifty acts every other turn`` () =
     let slowMonster = actor 1 "Cyberman" 2 1 5 5 50 100 0 'C'
     let game =
         { state 4 3 with
-            Player = actor 0 "scavenger" 1 1 10 10 100 100 0 '@'
+            Player = actor 0 "scavenger" 1 1 100 100 100 100 0 '@'
             Monsters = [ slowMonster ] }
 
     let afterOneTurn = runMonsterTurn game
     let afterTwoTurns = runMonsterTurn afterOneTurn
 
-    afterOneTurn.Player.Hp |> should equal 10
+    afterOneTurn.Player.Hp |> should equal 100
     afterOneTurn.Monsters.Head.Energy |> should equal 50
-    afterTwoTurns.Player.Hp |> should equal 9
+    afterTwoTurns.Player.Hp |> should equal 90
 
 [<Fact>]
 let ``save game failure reports an error message`` () =
@@ -315,12 +320,12 @@ let ``load game failure reports an error message`` () =
 
 [<Fact>]
 let ``target mode confirm out of range does not fire`` () =
-    let distantMonster = actor 1 "Dalek" 8 1 5 5 50 70 0 'D'
+    let distantMonster = actor 1 "Dalek" 8 1 50 50 50 70 0 'D'
     let targetSession =
         { State =
             { state 10 3 with
-                Player = actor 0 "scavenger" 1 1 10 10 100 100 0 '@'
-                PlayerWeapon = weapon "Rusty raygun" 3 2 None
+                Player = actor 0 "scavenger" 1 1 100 100 100 100 0 '@'
+                PlayerWeapon = weapon "Rusty raygun" 3 20 None
                 Monsters = [ distantMonster ] }
           Modal = TargetMode { X = 8; Y = 1 }
           History = [] }
@@ -329,7 +334,7 @@ let ``target mode confirm out of range does not fire`` () =
 
     match transition.NextSession with
     | Some nextSession ->
-        nextSession.State.Monsters.Head.Hp |> should equal 5
+        nextSession.State.Monsters.Head.Hp |> should equal 50
         nextSession.State.Messages.Head |> should equal "Rusty raygun cannot reach that far."
         nextSession.Modal |> should equal NoModal
     | None ->

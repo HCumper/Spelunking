@@ -32,6 +32,11 @@ type SpawnSettings =
     { MonsterRoomDensity: float
       MaxMonsters: int }
 
+type SpeechSettings =
+    { Enabled: bool
+      Rate: int
+      Volume: int }
+
 type WindowSettings =
     { Fullscreen: bool
       BorderlessWindowedFullscreen: bool
@@ -66,6 +71,7 @@ type AppSettings =
       Ui: UiSettings
       Combat: CombatSettings
       Spawn: SpawnSettings
+      Speech: SpeechSettings
       Window: WindowSettings }
 
 let private options =
@@ -229,6 +235,9 @@ let combatSettings () : CombatSettings =
 
 let spawnSettings () : SpawnSettings =
     (appSettings ()).Spawn
+
+let speechSettings () : SpeechSettings =
+    (appSettings ()).Speech
 
 let defaultFontSize () : IFont.Sizes =
     match (windowSettings ()).DefaultFontSize.Trim().ToLowerInvariant() with

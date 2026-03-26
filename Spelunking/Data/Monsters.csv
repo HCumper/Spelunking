@@ -1,8 +1,8 @@
 Name,MaxHp,Glyph,Frequency,MinDepth,MaxDepth,Speed,Strength,Accuracy,VisionRadius,Weapon,Behavior,OnDeathEffect,Unique,Description,SpeechCue
-Cyberman,3,C,7,1,3,50,70,90,80,,Chaser,,false,Cybernetic infantry that marches forward without hesitation.,Delete. Delete.
-Raston Warrior Robot,4,R,2,1,6,500,40,120,100,,Chaser,,false,An impossibly fast killing machine.,None survive.
-Dalek,5,D,10,1,10,50,70,110,100,Rusty raygun,Sniper,,false,A hateful war machine sealed inside its armored casing.,Exterminate.
-Ice Warrior,5,I,5,1,7,50,70,90,80,,Bruiser,,false,A reptilian armored soldier from Mars.,Hiss.
-Yeti,5,Y,4,1,4,50,70,70,60,,Bruiser,,false,A bulky robotic servant that lumbers straight at intruders.,Roar.
-Silurian,5,S,5,1,5,80,50,80,80,,Chaser,,false,A calculating reptile humanoid from Earth's distant past.,Observe.
-Sontaran,8,O,3,1,5,30,100,100,70,,Bruiser,,false,A clone-bred soldier built entirely for war.,Sontar-Ha.
+Cyberman,30,C,70,1,3,50,70,90,80,,Chaser,,FALSE,Cybernetic infantry that marches forward without hesitation.,Delete. Delete.
+Raston Warrior Robot,40,R,20,1,6,500,40,120,100,,Chaser,,FALSE,An impossibly fast killing machine.,None survive.
+Dalek,50,D,100,1,10,50,70,110,100,,Sniper,,FALSE,A hateful war machine sealed inside its armored casing.,Exterminate. exterminate
+Ice Warrior,50,I,50,1,7,50,70,90,80,,Bruiser,,FALSE,A reptilian armored soldier from Mars.,Hiss.
+Yeti,50,Y,40,1,4,50,70,70,60,,Bruiser,,FALSE,A bulky robotic servant that lumbers straight at intruders.,Roar.
+Silurian,50,S,50,1,5,80,50,80,80,,Chaser,,FALSE,A calculating reptile humanoid from Earth's distant past.,Observe.
+Sontaran,80,O,30,1,5,30,100,100,70,,Bruiser,,FALSE,A clone-bred soldier built entirely for war.,Sontar-Ha.

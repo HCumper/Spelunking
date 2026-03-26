@@ -63,12 +63,44 @@ let private carveVerticalTunnel (floors: bool[,]) x startY endY =
     for y in min startY endY .. max startY endY do
         floors[y, x] <- true
 
+let private interpolate startValue endValue segments index =
+    let delta = endValue - startValue
+    startValue + (delta * index) / segments
+
+let private carveBentConnection (floors: bool[,]) startX startY endX endY bends =
+    let totalSegments = bends + 1
+
+    let waypoints =
+        [ for i in 1 .. bends ->
+              if i % 2 = 1 then
+                  interpolate startX endX totalSegments i, startY
+              else
+                  endX, interpolate startY endY totalSegments i ]
+
+    let points =
+        [ startX, startY ]
+        @ waypoints
+        @ [ endX, endY ]
+
+    points
+    |> List.pairwise
+    |> List.iter (fun ((fromX, fromY), (toX, toY)) ->
+        carveHorizontalTunnel floors fromY fromX toX
+        carveVerticalTunnel floors toX fromY toY)
+
 let private carveConnection (floors: bool[,]) previousRoom nextRoom =
     let startX, startY = roomCenter previousRoom
     let endX, endY = roomCenter nextRoom
 
-    carveHorizontalTunnel floors startY startX endX
-    carveVerticalTunnel floors endX startY endY
+    let corridorLength = abs (endX - startX) + abs (endY - startY)
+
+    if corridorLength >= 60 then
+        carveBentConnection floors startX startY endX endY 2
+    elif corridorLength >= 30 then
+        carveBentConnection floors startX startY endX endY 1
+    else
+        carveHorizontalTunnel floors startY startX endX
+        carveVerticalTunnel floors endX startY endY
 
 let private randomRoom (random: Random) config =
     let availableWidth = max 1 (config.MapWidth - 2)

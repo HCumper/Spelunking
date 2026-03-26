@@ -18,7 +18,8 @@ module Dto =
           Speed: int
           Strength: int
           Energy: int
-          Glyph: string }
+          Glyph: string
+          SpeechCue: string option }
 
     [<CLIMutable>]
     type SaveWeapon =
@@ -78,7 +79,8 @@ let private actorToSave (actor: Actor) : Dto.SaveActor =
       Speed = actor.Speed
       Strength = actor.Strength
       Energy = actor.Energy
-      Glyph = string actor.Glyph }
+      Glyph = string actor.Glyph
+      SpeechCue = actor.SpeechCue }
 
 let private actorFromSave (actor: Dto.SaveActor) : Actor =
     { Id = actor.Id
@@ -93,7 +95,8 @@ let private actorFromSave (actor: Dto.SaveActor) : Actor =
         match actor.Glyph with
         | null
         | "" -> '?'
-        | value -> value[0] }
+        | value -> value[0]
+      SpeechCue = actor.SpeechCue }
 
 let private weaponToSave (weapon: Weapon) : Dto.SaveWeapon =
     { Name = weapon.Name
