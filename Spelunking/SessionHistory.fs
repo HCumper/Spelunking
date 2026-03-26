@@ -11,10 +11,13 @@ let private recordsHistory command =
     | Wait
     | FireAt _ -> true
 
+let pushHistory state history =
+    state :: history |> List.truncate 10
+
 let recordAction command session =
     let history =
         if recordsHistory command then
-            session.State :: session.History |> List.truncate 10
+            pushHistory session.State session.History
         else
             session.History
 

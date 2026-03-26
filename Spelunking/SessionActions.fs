@@ -28,7 +28,14 @@ let private outputEvents previousSession nextSession =
         | QuitConfirm, NoModal -> true
         | _ -> false
 
+    let transitionEvents =
+        if nextSession.State.World <> previousSession.State.World then
+            [ SpeakText "The Tardis hurtles through time and space and re-materialized." ]
+        else
+            []
+
     combine previousSession.State.Messages nextSession.State.Messages openedModal closedModal
+    @ transitionEvents
 
 let private targetInRange target state =
     let dx = target.X - state.Player.Position.X
@@ -49,7 +56,7 @@ let private isInterestingTile point state =
         match state.Map.Tiles[point.Y, point.X] with
         | Floor -> false
         | Wall
-        | StairsDown -> true
+        | Tardis -> true
 
 let private firstVisibleInterestingTileInDirection dx dy state =
     let origin = state.Player.Position
@@ -81,6 +88,62 @@ let private applyAction command session =
 
     { withHistory with
         State = update command withHistory.State }
+
+let private neighborDirections =
+    [ (-1, -1); (0, -1); (1, -1)
+      (-1, 0);           (1, 0)
+      (-1, 1);  (0, 1);  (1, 1) ]
+
+let private canStepTo state point =
+    point.X >= 0
+    && point.X < state.Map.Width
+    && point.Y >= 0
+    && point.Y < state.Map.Height
+    && Simulation.isWalkable (Simulation.tileAt state.Map point)
+    && not (state.Monsters |> List.exists (fun monster -> monster.Position = point))
+
+let private followRunDirection state previousPosition currentPosition =
+    neighborDirections
+    |> List.choose (fun (dx, dy) ->
+        let candidate =
+            { X = currentPosition.X + dx
+              Y = currentPosition.Y + dy }
+
+        if candidate = previousPosition || not (canStepTo state candidate) then
+            None
+        else
+            Some(dx, dy))
+    |> function
+        | [ nextDirection ] -> Some nextDirection
+        | _ -> None
+
+let private newlyVisibleMonsterSeen previousState nextState =
+    nextState.Monsters
+    |> List.exists (fun monster ->
+        nextState.VisibleTiles[monster.Position.Y, monster.Position.X]
+        && not previousState.VisibleTiles[monster.Position.Y, monster.Position.X])
+
+let private applyRun dx dy session =
+    let rec loop currentSession currentDx currentDy =
+        let nextPosition =
+            { X = currentSession.State.Player.Position.X + currentDx
+              Y = currentSession.State.Player.Position.Y + currentDy }
+
+        if not (canStepTo currentSession.State nextPosition) then
+            currentSession
+        else
+            let history = SessionHistory.pushHistory currentSession.State currentSession.History
+            let nextState = update (Move(currentDx, currentDy)) currentSession.State
+            let nextSession = { currentSession with State = nextState; History = history }
+
+            if nextState.World <> currentSession.State.World || newlyVisibleMonsterSeen currentSession.State nextState then
+                nextSession
+            else
+                match followRunDirection nextState currentSession.State.Player.Position nextState.Player.Position with
+                | Some (nextDx, nextDy) -> loop nextSession nextDx nextDy
+                | None -> nextSession
+
+    loop session dx dy
 
 let private saveCurrentSession services session =
     try
@@ -128,6 +191,8 @@ let applyIntent services intent session : Transition =
                 { session with Modal = NoModal }
             | NoModal, Act command ->
                 applyAction command session
+            | NoModal, Run (dx, dy) ->
+                applyRun dx dy session
             | NoModal, UseTimeShifter ->
                 { session with Modal = TimeShiftPrompt "" }
             | NoModal, SaveGame ->

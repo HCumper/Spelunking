@@ -50,7 +50,7 @@ let private describePoint point state =
             match state.Map.Tiles[point.Y, point.X] with
             | Wall -> "Rough cavern wall."
             | Floor -> "Open floor."
-            | StairsDown -> "A staircase leading deeper."
+            | Tardis -> "The TARDIS. Entering it will carry you onward."
 
 let private inventoryLines () =
     [ "a) Rusty raygun"

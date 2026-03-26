@@ -12,6 +12,7 @@ open Spelunk.SessionActions
 open Spelunk.SessionHistory
 open Spelunk.Simulation
 open Spelunk.Visibility
+open Spelunk.World
 open Xunit
 
 let private actor id name x y hp maxHp speed strength energy glyph =
@@ -40,7 +41,7 @@ let private map width height defaultTile =
 let private state width height =
     let dungeon = map width height Floor
 
-    { Depth = 1
+    { World = 1
       TurnCount = 0
       Map = dungeon
       Player = actor 0 "scavenger" 1 1 100 100 100 100 0 '@'
@@ -79,7 +80,7 @@ let private saveFilePath () =
     Path.Combine(AppContext.BaseDirectory, "Data", "savegame.json")
 
 let private assertStateEqual actual expected =
-    actual.Depth |> should equal expected.Depth
+    actual.World |> should equal expected.World
     actual.TurnCount |> should equal expected.TurnCount
     actual.Map |> should equal expected.Map
     actual.Player |> should equal expected.Player
@@ -150,6 +151,49 @@ let ``recordAction only stores turn-taking commands`` () =
     moved.History.Length |> should equal 1
     waited.History.Length |> should equal 1
     fired.History.Length |> should equal 1
+
+[<Fact>]
+let ``run continues through a corridor until a branch appears`` () =
+    let dungeon = map 5 5 Wall
+
+    [ (1, 2); (2, 2); (3, 2); (4, 2); (4, 1) ]
+    |> List.iter (fun (x, y) -> dungeon.Tiles[y, x] <- Floor)
+
+    let startState =
+        { state 5 5 with
+            Map = dungeon
+            Player = actor 0 "scavenger" 1 2 100 100 100 100 0 '@' }
+
+    let startSession = session startState
+    let transition = applyIntent inertServices (Run(1, 0)) startSession
+    let nextSession = transition.NextSession.Value
+
+    nextSession.State.Player.Position |> should equal { X = 3; Y = 2 }
+    nextSession.History.Length |> should equal 2
+
+[<Fact>]
+let ``run stops when a monster becomes visible`` () =
+    let dungeon = map 6 5 Wall
+
+    [ (1, 2); (2, 2); (3, 2); (4, 2); (4, 1) ]
+    |> List.iter (fun (x, y) -> dungeon.Tiles[y, x] <- Floor)
+
+    let lurkingMonster = actor 1 "Dalek" 4 1 100 100 100 100 0 'D'
+
+    let startState =
+        { state 6 5 with
+            Map = dungeon
+            Player = actor 0 "scavenger" 1 2 100 100 100 100 0 '@'
+            Monsters = [ lurkingMonster ] }
+        |> computeVisibility
+
+    startState.VisibleTiles[1, 4] |> should equal false
+
+    let result = applyIntent inertServices (Run(1, 0)) (session startState)
+    let nextSession = result.NextSession.Value
+
+    nextSession.State.Player.Position |> should equal { X = 2; Y = 2 }
+    nextSession.History.Length |> should equal 1
 
 [<Fact>]
 let ``rewindSession restores the requested earlier state`` () =
@@ -229,7 +273,7 @@ let ``melee kill grants player the monster max hp boost`` () =
             Player = injuredPlayer
             Monsters = [ target ] }
 
-    let next = update (Move(1, 0)) game
+    let next = Spelunk.Domain.update (Move(1, 0)) game
 
     next.Player.Hp |> should equal 95
     next.Monsters |> should be Empty
@@ -267,6 +311,40 @@ let ``ranged attack consumes ammo on hit`` () =
     next.PlayerWeapon.Ammo |> should equal (Some 1)
     next.Monsters.Head.Hp |> should equal 50
     next.Messages.Head |> should equal "You shoot the Dalek."
+
+[<Fact>]
+let ``moving onto the tardis generates the next world`` () =
+    let dungeon = map 3 3 Floor
+    dungeon.Tiles[1, 2] <- Tardis
+
+    let game =
+        { state 3 3 with
+            World = 4
+            Map = dungeon
+            Player = actor 0 "scavenger" 1 1 75 100 100 100 0 '@'
+            Monsters = [ actor 1 "Cyberman" 0 0 30 30 50 70 0 'C' ] }
+
+    let next = Spelunk.Domain.update (Move(1, 0)) game
+
+    next.World |> should equal 5
+    next.Player.Hp |> should equal 75
+    next.Player.Position |> should not' (equal { X = 2; Y = 1 })
+    next.Messages.Head |> should equal "The Tardis hurtles through time and space and re-materialized."
+
+[<Fact>]
+let ``createDungeon places exactly one tardis on a walkable tile`` () =
+    let map, _ = createDungeon ()
+
+    let tardisTiles =
+        [ for y in 0 .. map.Height - 1 do
+              for x in 0 .. map.Width - 1 do
+                  if map.Tiles[y, x] = Tardis then
+                      yield { X = x; Y = y } ]
+
+    tardisTiles.Length |> should equal 1
+    let tardis = tardisTiles.Head
+    (tardis.X >= 0 && tardis.X < map.Width) |> should equal true
+    (tardis.Y >= 0 && tardis.Y < map.Height) |> should equal true
 
 [<Fact>]
 let ``monster speed two hundred attacks twice in one turn when adjacent`` () =

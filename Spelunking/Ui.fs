@@ -25,19 +25,19 @@ let private tileGlyph tile =
     match tile with
     | Wall -> '#'
     | Floor -> '.'
-    | StairsDown -> '>'
+    | Tardis -> 'T'
 
 let private tileForeground tile =
     match tile with
     | Wall -> Color.Gray
     | Floor -> Color.DarkSlateGray
-    | StairsDown -> Color.Gold
+    | Tardis -> Color.DeepSkyBlue
 
 let private exploredTileForeground tile =
     match tile with
     | Wall -> Color.DarkGray
     | Floor -> Color.DimGray
-    | StairsDown -> Color.DarkGoldenrod
+    | Tardis -> Color.SteelBlue
 
 let private overlayColor color =
     match color with
@@ -162,6 +162,28 @@ let private pressedMappedKey (keyboard: Keyboard) (mappings: (Key * Keys list) l
     |> List.tryFind (fun (_, keys) -> keys |> List.exists keyboard.IsKeyPressed)
     |> Option.map fst
 
+let private runDirectionMappings : ((int * int) * Keys list) list =
+    [ (-1, -1), [ Keys.NumPad7 ]
+      (0, -1), [ Keys.NumPad8 ]
+      (1, -1), [ Keys.NumPad9 ]
+      (-1, 0), [ Keys.NumPad4 ]
+      (1, 0), [ Keys.NumPad6 ]
+      (-1, 1), [ Keys.NumPad1 ]
+      (0, 1), [ Keys.NumPad2 ]
+      (1, 1), [ Keys.NumPad3 ] ]
+
+let private pressedRunIntent (keyboard: Keyboard) =
+    let runModifierHeld =
+        keyboard.IsKeyDown(Keys.OemPeriod)
+        || keyboard.IsKeyDown(Keys.Decimal)
+
+    if not runModifierHeld then
+        None
+    else
+        runDirectionMappings
+        |> List.tryFind (fun (_, keys) -> keys |> List.exists keyboard.IsKeyPressed)
+        |> Option.map (fun ((dx, dy), _) -> Run(dx, dy))
+
 type DividerPanel(width, height, glyph, onPress: MouseScreenObjectState -> unit, onDrag: MouseScreenObjectState -> unit, onRelease: unit -> unit) as this =
     inherit ScreenSurface(width, height)
 
@@ -219,7 +241,7 @@ type StatsPanel(windowHeight) =
         let height = this.Surface.Height
         drawFrame this 0 0 width height
         writeText this 2 1 Color.Yellow "SCAV"
-        writeText this 2 3 Color.White (sprintf "Depth %d" session.State.Depth)
+        writeText this 2 3 Color.White (sprintf "World %d" session.State.World)
         writeText this 2 5 Color.White (sprintf "HP %d/%d" session.State.Player.Hp session.State.Player.MaxHp)
         writeText this 2 7 Color.LightGray (sprintf "View %d,%d" camera.X camera.Y)
         writeText this 2 14 Color.LightGray "Look: L"
@@ -442,13 +464,16 @@ type RootScreen(screenWidth, screenHeight) as this =
 
         match transition.NextSession with
         | Some nextSession ->
+            if nextSession.State.World <> session.State.World then
+                spokenMonsterIds <- Set.empty
             session <- nextSession
         | None ->
             Game.Instance.MonoGameInstance.Exit()
 
         transition.Events
         |> List.iter (function
-            | PlaySound _ -> ())
+            | PlaySound _ -> ()
+            | SpeakText text -> services.Speak text)
 
         let newlySeenSpeakingMonsters =
             session.State.Monsters
@@ -464,14 +489,23 @@ type RootScreen(screenWidth, screenHeight) as this =
 
         redraw ()
 
-    let tryGetKey session (keyboard: Keyboard) =
+    let tryGetIntent session (keyboard: Keyboard) =
         match session.Modal with
+        | NoModal ->
+            match pressedRunIntent keyboard with
+            | Some intent -> Some intent
+            | None ->
+                pressedMappedKey keyboard keyTable
+                |> Option.map (intentFromKey bindings)
         | TimeShiftPrompt _ ->
             match pressedMappedKey keyboard timeShiftPromptKeyTable with
-            | Some key -> Some key
-            | None -> pressedMappedKey keyboard keyTable
+            | Some key -> Some(intentFromKey bindings key)
+            | None ->
+                pressedMappedKey keyboard keyTable
+                |> Option.map (intentFromKey bindings)
         | _ ->
             pressedMappedKey keyboard keyTable
+            |> Option.map (intentFromKey bindings)
 
     do
         this.UseKeyboard <- true
@@ -486,8 +520,8 @@ type RootScreen(screenWidth, screenHeight) as this =
         redraw ()
 
     override _.ProcessKeyboard(keyboard: Keyboard) =
-        match tryGetKey session keyboard with
-        | Some key ->
-            key |> intentFromKey bindings |> normalizeIntent session |> applyIntentAndRedraw
+        match tryGetIntent session keyboard with
+        | Some intent ->
+            intent |> normalizeIntent session |> applyIntentAndRedraw
             true
         | None -> base.ProcessKeyboard(keyboard)

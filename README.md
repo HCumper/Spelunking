@@ -7,7 +7,7 @@ Doctor Who-themed dungeon crawler built in F# with SadConsole.
 - Procedurally generated scrolling dungeon
 - Fog of war with explored-memory tiles
 - Melee and ranged combat
-- Weighted monster spawning by dungeon depth
+- Weighted monster spawning by world
 - Time shifter that rewinds up to 10 turns
 - JSON save/load
 

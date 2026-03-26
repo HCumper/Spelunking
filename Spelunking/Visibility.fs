@@ -14,7 +14,7 @@ let private blocksSight tile =
     match tile with
     | Wall -> true
     | Floor
-    | StairsDown -> false
+    | Tardis -> false
 
 let private positionsOnLine startPoint endPoint =
     let dx = abs (endPoint.X - startPoint.X)

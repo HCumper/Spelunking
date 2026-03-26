@@ -47,8 +47,8 @@ type MonsterTemplate =
       MaxHp: int
       Glyph: string
       Frequency: int
-      MinDepth: int
-      MaxDepth: int
+      MinWorld: int
+      MaxWorld: int
       Speed: int
       Strength: int
       Accuracy: int
@@ -126,8 +126,8 @@ let private parseMonsterCsvLine (line: string) : MonsterTemplate =
       MaxHp = parseInt "MaxHp" columns[1]
       Glyph = columns[2]
       Frequency = parseInt "Frequency" columns[3]
-      MinDepth = parseInt "MinDepth" columns[4]
-      MaxDepth = parseInt "MaxDepth" columns[5]
+      MinWorld = parseInt "MinWorld" columns[4]
+      MaxWorld = parseInt "MaxWorld" columns[5]
       Speed = parseInt "Speed" columns[6]
       Strength = parseInt "Strength" columns[7]
       Accuracy = parseInt "Accuracy" columns[8]
@@ -155,7 +155,7 @@ let private loadMonsters () : MonsterTemplate list =
     | [] -> []
     | header :: rows ->
         let expectedHeader =
-            "Name,MaxHp,Glyph,Frequency,MinDepth,MaxDepth,Speed,Strength,Accuracy,VisionRadius,Weapon,Behavior,OnDeathEffect,Unique,Description,SpeechCue"
+            "Name,MaxHp,Glyph,Frequency,MinWorld,MaxWorld,Speed,Strength,Accuracy,VisionRadius,Weapon,Behavior,OnDeathEffect,Unique,Description,SpeechCue"
 
         if not (header.Equals(expectedHeader, StringComparison.OrdinalIgnoreCase)) then
             invalidOp $"Invalid monster CSV header. Expected '{expectedHeader}'."

@@ -11,7 +11,7 @@ let tileAt map point =
 let isWalkable tile =
     match tile with
     | Floor
-    | StairsDown -> true
+    | Tardis -> true
     | Wall -> false
 
 let actorAt point actors =

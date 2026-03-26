@@ -25,6 +25,17 @@ let private fallbackFloorPoint (layout: Layout) =
     |> Seq.tryHead
     |> Option.defaultValue { X = 1; Y = 1 }
 
+let private randomFloorPoint (layout: Layout) =
+    let candidates =
+        [| for y in 0 .. layout.Height - 1 do
+               for x in 0 .. layout.Width - 1 do
+                   if layout.Floors[y, x] then
+                       yield { X = x; Y = y } |]
+
+    match candidates with
+    | [||] -> fallbackFloorPoint layout
+    | points -> points[System.Random.Shared.Next(points.Length)]
+
 let createDungeon () =
     let layout: Layout = generate (dungeonConfig ())
     let tiles = Array2D.create layout.Height layout.Width Wall
@@ -35,13 +46,10 @@ let createDungeon () =
             if layout.Floors[y, x] then
                 tiles[y, x] <- Floor
 
-    let stairPoint =
-        layout.Rooms
-        |> List.tryLast
-        |> Option.map roomCenter
-        |> Option.defaultValue (fallbackFloorPoint layout)
+    let tardisPoint =
+        randomFloorPoint layout
 
-    tiles[stairPoint.Y, stairPoint.X] <- StairsDown
+    tiles[tardisPoint.Y, tardisPoint.X] <- Tardis
 
     { Width = layout.Width
       Height = layout.Height

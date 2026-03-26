@@ -20,6 +20,7 @@ type Session =
 
 type Intent =
     | Act of Command
+    | Run of dx: int * dy: int
     | OpenLook
     | OpenTarget
     | OpenInventory

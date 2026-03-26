@@ -15,6 +15,7 @@ type SoundCue =
 
 type OutputEvent =
     | PlaySound of SoundCue
+    | SpeakText of string
 
 let private classifyMessage (message: string) =
     if message.StartsWith("You kill") then

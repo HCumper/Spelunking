@@ -30,7 +30,7 @@ module Dto =
 
     [<CLIMutable>]
     type SaveGameState =
-        { Depth: int
+        { World: int
           TurnCount: int
           MapWidth: int
           MapHeight: int
@@ -60,13 +60,13 @@ let private tileToChar tile =
     match tile with
     | Wall -> '#'
     | Floor -> '.'
-    | StairsDown -> '>'
+    | Tardis -> 'T'
 
 let private charToTile glyph =
     match glyph with
     | '#' -> Wall
     | '.' -> Floor
-    | '>' -> StairsDown
+    | 'T' -> Tardis
     | other -> invalidOp $"Unsupported tile glyph '{other}' in save file."
 
 let private actorToSave (actor: Actor) : Dto.SaveActor =
@@ -189,7 +189,7 @@ let private mapFromRle (width: int) (height: int) (encoded: string) : Map =
       Tiles = tiles }
 
 let private stateToSave (state: GameState) : Dto.SaveGameState =
-    { Depth = state.Depth
+    { World = state.World
       TurnCount = state.TurnCount
       MapWidth = state.Map.Width
       MapHeight = state.Map.Height
@@ -202,7 +202,7 @@ let private stateToSave (state: GameState) : Dto.SaveGameState =
       Messages = state.Messages }
 
 let private stateFromSave (state: Dto.SaveGameState) : GameState =
-    { Depth = state.Depth
+    { World = state.World
       TurnCount = state.TurnCount
       Map = mapFromRle state.MapWidth state.MapHeight state.TilesRle
       Player = actorFromSave state.Player

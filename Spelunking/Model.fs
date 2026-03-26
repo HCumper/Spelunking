@@ -6,7 +6,7 @@ type Position = { X: int; Y: int }
 type Tile =
     | Wall
     | Floor
-    | StairsDown
+    | Tardis
 
 type Actor =
     { Id: int
@@ -32,7 +32,7 @@ type Map =
       Tiles: Tile[,] }
 
 type GameState =
-    { Depth: int
+    { World: int
       TurnCount: int
       Map: Map
       Player: Actor

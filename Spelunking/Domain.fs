@@ -20,7 +20,7 @@ let private advanceTurn state =
         { state with TurnCount = nextTurnCount }
 
 let private chooseWeightedMonsterTemplate
-    (depth: int)
+    (world: int)
     (templates: MonsterTemplate list)
     (random: System.Random)
     =
@@ -28,8 +28,8 @@ let private chooseWeightedMonsterTemplate
         templates
         |> List.filter (fun template ->
             template.Frequency > 0
-            && depth >= template.MinDepth
-            && depth <= template.MaxDepth)
+            && world >= template.MinWorld
+            && world <= template.MaxWorld)
 
     match eligibleTemplates with
     | [] -> None
@@ -50,10 +50,8 @@ let private chooseWeightedMonsterTemplate
 
         pick 0 eligibleTemplates
 
-let initialState () =
-    let depth = 1
+let private createWorldState world player weapon messages =
     let map, rooms = createDungeon ()
-    let startingWeaponTemplate = defaultWeaponTemplate ()
     let spawnPoint =
         rooms
         |> List.tryHead
@@ -66,22 +64,11 @@ let initialState () =
         |> List.filter (fun room -> not (pointInRoom room spawnPoint))
         |> List.map roomCenter
 
-    let player =
-        { Id = 0
-          Name = "scavenger"
-          Position = spawnPoint
-          Hp = 100
-          MaxHp = 100
-          Speed = 100
-          Strength = 100
-          Energy = 0
-          Glyph = '@'
-          SpeechCue = None }
-
     let monsters =
         let templates = monsterTemplates ()
         let spawn = spawnSettings ()
         let random = System.Random.Shared
+
         if List.isEmpty templates then
             []
         else
@@ -102,9 +89,8 @@ let initialState () =
             selectedSpawns
             |> List.indexed
             |> List.choose (fun (index, spawnPoint) ->
-                // Spawn locations come from sampled rooms; monster types are chosen independently by frequency at this depth.
-                chooseWeightedMonsterTemplate depth templates random
-                |> Option.map (fun template ->
+                chooseWeightedMonsterTemplate world templates random
+                |> Option.map (fun (template: MonsterTemplate) ->
                     { Id = index + 1
                       Name = template.Name
                       Position = spawnPoint
@@ -120,25 +106,60 @@ let initialState () =
                         | value -> value[0]
                       SpeechCue = template.SpeechCue }))
 
-    { Depth = depth
+    { World = world
       TurnCount = 0
       Map = map
-      Player = player
-      PlayerWeapon =
-        { Name = startingWeaponTemplate.Name
-          Range = startingWeaponTemplate.Range
-          Damage = startingWeaponTemplate.Damage
-          Ammo = startingWeaponTemplate.Ammo }
+      Player = { player with Position = spawnPoint; Energy = 0 }
+      PlayerWeapon = weapon
       Monsters = monsters
       VisibleTiles = Array2D.create map.Height map.Width false
       ExploredTiles = Array2D.create map.Height map.Width false
-      Messages =
-        [ 
-          "Move with WASD or arrow keys. Press Space to wait. Press Q to quit." ] }
+      Messages = messages }
     |> computeVisibility
 
+let private enterTardis state =
+    createWorldState
+        (state.World + 1)
+        state.Player
+        state.PlayerWeapon
+        [ "The Tardis hurtles through time and space and re-materialized." ]
+
+let initialState () =
+    let startingWeaponTemplate = defaultWeaponTemplate ()
+    let player =
+        { Id = 0
+          Name = "scavenger"
+          Position = { X = 1; Y = 1 }
+          Hp = 100
+          MaxHp = 100
+          Speed = 100
+          Strength = 100
+          Energy = 0
+          Glyph = '@'
+          SpeechCue = None }
+
+    let initial =
+        createWorldState
+            1
+            player
+            { Name = startingWeaponTemplate.Name
+              Range = startingWeaponTemplate.Range
+              Damage = startingWeaponTemplate.Damage
+              Ammo = startingWeaponTemplate.Ammo }
+            []
+
+    { initial with
+        Messages =
+            "Move with WASD or arrow keys. Press Space to wait. Press Q to quit."
+            :: initial.Messages }
+
 let update command state =
-    Simulation.update command state
-    |> runMonsterTurn
-    |> advanceTurn
-    |> computeVisibility
+    let resolved = Simulation.update command state
+
+    if resolved.Map.Tiles[resolved.Player.Position.Y, resolved.Player.Position.X] = Tardis then
+        enterTardis resolved
+    else
+        resolved
+        |> runMonsterTurn
+        |> advanceTurn
+        |> computeVisibility
