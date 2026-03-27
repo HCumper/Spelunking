@@ -1,6 +1,8 @@
 (* Maps gameplay and UI transitions onto future speech and sound output events. *)
 module Spelunk.Output
 
+open Spelunk.Model
+
 type SoundCue =
     | UiOpen
     | UiClose
@@ -16,6 +18,7 @@ type SoundCue =
 type OutputEvent =
     | PlaySound of SoundCue
     | SpeakText of string
+    | AnimateProjectile of Position list
 
 let private classifyMessage (message: string) =
     if message.StartsWith("You kill") then

@@ -1,22 +1,22 @@
-Name,MaxHp,Glyph,Frequency,MinWorld,MaxWorld,Speed,Strength,Accuracy,VisionRadius,Weapon,Behavior,OnDeathEffect,Unique,Description,SpeechCue
-Cyberman,30,C,70,1,3,50,70,90,80,,Chaser,,FALSE,Cybernetic infantry that marches forward without hesitation.,Delete. Delete.
-Raston Warrior Robot,40,R,20,1,6,500,40,120,100,,Chaser,,FALSE,An impossibly fast killing machine.,None survive.
-Dalek,50,D,100,1,10,50,70,110,100,,Sniper,,FALSE,A hateful war machine sealed inside its armored casing.,Exterminate. exterminate
-Ice Warrior,50,I,50,1,7,50,70,90,80,,Bruiser,,FALSE,A reptilian armored soldier from Mars.,Hiss.
-Yeti,50,Y,40,1,4,50,70,70,60,,Bruiser,,FALSE,A bulky robotic servant that lumbers straight at intruders.,Roar.
-Silurian,50,S,50,1,5,80,50,80,80,,Chaser,,FALSE,A calculating reptile humanoid from Earth's distant past.,Observe.
-Sontaran,80,O,30,1,5,30,100,100,70,,Bruiser,,FALSE,A clone-bred soldier built entirely for war.,Sontar-Ha.
-Auton,40,A,50,1,4,60,60,80,70,,Chaser,,FALSE,A faceless plastic killer animated by the Nestene Consciousness.,You will be like us.
-Zygon,60,Z,35,2,6,50,70,90,80,,Chaser,,FALSE,A shape-changing reptilian infiltrator from the lost world of Zygor.,This world can be ours.
-Judoon,90,J,25,3,8,40,110,100,90,,Bruiser,,FALSE,A rhinoceros-headed space police trooper in heavy armor.,Judoon platoon upon the moon.
-Sea Devil,60,V,30,2,6,70,60,85,85,,Chaser,,FALSE,An amphibious reptile warrior risen from the oceans.,Return to the sea.
-Ogron,90,G,25,2,6,40,120,60,60,,Bruiser,,FALSE,A brutal alien mercenary used as muscle by more cunning masters.,Grrr.
-Draconian,70,K,20,3,7,50,90,95,90,,Bruiser,,FALSE,A proud reptilian noble from the Draconian Empire.,Honor demands obedience.
-Weeping Angel,70,W,15,4,10,200,130,120,110,,Chaser,,FALSE,A quantum-locked predator that closes distance in impossible bursts.,Do not blink.
-Slitheen,100,H,15,4,9,40,140,70,75,,Bruiser,,FALSE,A massive hunter wearing a stolen human disguise.,Feed me.
-Sycorax,80,X,20,3,7,50,100,95,85,,Bruiser,,FALSE,An axe-bearing scavenger warlord from the stars.,Blood control.
-Mire,110,M,12,5,10,40,150,100,90,,Bruiser,,FALSE,A heavily armored war machine built for conquest.,You are beneath us.
-Macra,120,Q,10,5,10,30,160,70,65,,Bruiser,,FALSE,A giant crab-like horror lurking in the dark passages.,There is no such thing as Macra.
-Silence,70,N,18,4,9,80,80,110,95,,Sniper,,FALSE,A suit-clad confessional predator you forget the instant you look away.,Silence will fall.
-Master,10000,F,1,8,88,25,70,100,150,,Bruiser,,TRUE,The Master,
+Name,MaxHp,Glyph,Frequency,MinWorld,MaxWorld,Speed,Strength,Accuracy,VisionRadius,MeleeWeapon,RangedWeapon,Behavior,OnDeathEffect,Unique,Description,SpeechCue
+Cyberman,30,C,70,1,3,50,70,90,80,Rusty Knife,Rusty Raygun,Chaser,,FALSE,Cybernetic infantry that marches forward without hesitation.,Delete. Delete.
+Raston Warrior Robot,40,R,20,1,6,500,40,120,100,Light Saber,,Chaser,,FALSE,An impossibly fast killing machine.,None survive.
+Dalek,50,D,100,1,10,50,70,110,100,Rusty Knife,Exterminator,Sniper,,FALSE,A hateful war machine sealed inside its armored casing.,Exterminate. exterminate
+Ice Warrior,50,I,50,1,7,50,70,90,80,Lirpa,Revolver,Bruiser,,FALSE,A reptilian armored soldier from Mars.,Hiss.
+Yeti,50,Y,40,1,4,50,70,70,60,Batleath,,Bruiser,,FALSE,A bulky robotic servant that lumbers straight at intruders.,Roar.
+Silurian,50,S,50,1,5,80,50,80,80,Rusty Knife,Revolver,Chaser,,FALSE,A calculating reptile humanoid from Earth's distant past.,Observe.
+Sontaran,80,O,30,1,5,30,100,100,70,Lirpa,Rusty Raygun,Bruiser,,FALSE,A clone-bred soldier built entirely for war.,Sontar-Ha.
+Auton,40,A,50,1,4,60,60,80,70,Rusty Knife,,Chaser,,FALSE,A faceless plastic killer animated by the Nestene Consciousness.,You will be like us.
+Zygon,60,Z,35,2,6,50,70,90,80,Rusty Knife,Bullwhip,Chaser,,FALSE,A shape-changing reptilian infiltrator from the lost world of Zygor.,This world can be ours.
+Judoon,90,J,25,3,8,40,110,100,90,Batleath,Revolver,Bruiser,,FALSE,A rhinoceros-headed space police trooper in heavy armor.,Judoon platoon upon the moon.
+Sea Devil,60,V,30,2,6,70,60,85,85,Rusty Knife,Revolver,Chaser,,FALSE,An amphibious reptile warrior risen from the oceans.,Return to the sea.
+Ogron,90,G,25,2,6,40,120,60,60,Batleath,,Bruiser,,FALSE,A brutal alien mercenary used as muscle by more cunning masters.,Grrr.
+Draconian,70,K,20,3,7,50,90,95,90,Lirpa,Revolver,Bruiser,,FALSE,A proud reptilian noble from the Draconian Empire.,Honor demands obedience.
+Weeping Angel,70,W,15,4,10,200,130,120,110,Light Saber,,Chaser,,FALSE,A quantum-locked predator that closes distance in impossible bursts.,Do not blink.
+Slitheen,100,H,15,4,9,40,140,70,75,Batleath,,Bruiser,,FALSE,A massive hunter wearing a stolen human disguise.,Feed me.
+Sycorax,80,X,20,3,7,50,100,95,85,Lirpa,Bullwhip,Bruiser,,FALSE,An axe-bearing scavenger warlord from the stars.,Blood control.
+Mire,110,M,12,5,10,40,150,100,90,Light Saber,Exterminator,Bruiser,,FALSE,A heavily armored war machine built for conquest.,You are beneath us.
+Macra,120,Q,10,5,10,30,160,70,65,Batleath,,Bruiser,,FALSE,A giant crab-like horror lurking in the dark passages.,There is no such thing as Macra.
+Silence,70,N,18,4,9,80,80,110,95,Rusty Knife,Revolver,Sniper,,FALSE,A suit-clad confessional predator you forget the instant you look away.,Silence will fall.
+Master,10000,F,1,8,88,25,70,100,150,Light Saber,Sonic Grenade,Bruiser,,TRUE,The Master,
 

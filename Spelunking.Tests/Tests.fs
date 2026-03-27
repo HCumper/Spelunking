@@ -6,7 +6,7 @@ open FsUnit.Xunit
 open Spelunk.Application
 open Spelunk.Combat
 open Spelunk.Model
-open Spelunk.Save
+open Spelunk.Output
 open Spelunk.Services
 open Spelunk.SessionActions
 open Spelunk.SessionHistory
@@ -15,8 +15,14 @@ open Spelunk.Visibility
 open Spelunk.World
 open Xunit
 
-let private actor id name x y hp maxHp speed strength energy glyph =
-    { Id = id
+let private weapon name range damage ammo : Weapon =
+    { Spelunk.Model.Weapon.Name = name
+      Range = range
+      Damage = damage
+      Ammo = ammo }
+
+let private actor id name x y hp maxHp speed strength energy glyph : Actor =
+    { Spelunk.Model.Actor.Id = id
       Name = name
       Position = { X = x; Y = y }
       Hp = hp
@@ -24,14 +30,15 @@ let private actor id name x y hp maxHp speed strength energy glyph =
       Speed = speed
       Strength = strength
       Energy = energy
+      MeleeWeapon = weapon "Rusty knife" 1 10 None
+      RangedWeapon = weapon "Rusty raygun" 8 20 None
       Glyph = glyph
       SpeechCue = None }
 
-let private weapon name range damage ammo =
-    { Name = name
-      Range = range
-      Damage = damage
-      Ammo = ammo }
+let private withWeapons (meleeWeapon: Weapon) (rangedWeapon: Weapon) (actor: Actor) : Actor =
+    { actor with
+        MeleeWeapon = meleeWeapon
+        RangedWeapon = rangedWeapon }
 
 let private map width height defaultTile =
     { Width = width
@@ -45,7 +52,6 @@ let private state width height =
       TurnCount = 0
       Map = dungeon
       Player = actor 0 "scavenger" 1 1 100 100 100 100 0 '@'
-      PlayerWeapon = weapon "Rusty raygun" 8 20 None
       Monsters = []
       VisibleTiles = Array2D.create height width false
       ExploredTiles = Array2D.create height width false
@@ -84,7 +90,6 @@ let private assertStateEqual actual expected =
     actual.TurnCount |> should equal expected.TurnCount
     actual.Map |> should equal expected.Map
     actual.Player |> should equal expected.Player
-    actual.PlayerWeapon |> should equal expected.PlayerWeapon
     actual.Monsters |> should equal expected.Monsters
     actual.VisibleTiles |> should equal expected.VisibleTiles
     actual.ExploredTiles |> should equal expected.ExploredTiles
@@ -130,9 +135,9 @@ let ``save and load round-trip game state and history`` () =
     if File.Exists path then
         File.Delete path
 
-    saveGame original [ prior ]
+    Spelunk.Save.saveGame original [ prior ]
 
-    match tryLoadGame () with
+    match Spelunk.Save.tryLoadGame () with
     | Some (loadedState, loadedHistory) ->
         assertStateEqual loadedState original
         loadedHistory.Length |> should equal 1
@@ -265,6 +270,39 @@ let ``load game intent uses the services boundary`` () =
         failwith "Load should not exit the game."
 
 [<Fact>]
+let ``look confirm advances to the next visible object and then closes`` () =
+    let dungeon = map 6 3 Floor
+    dungeon.Tiles[1, 5] <- Wall
+
+    let lookoutMonster = actor 1 "Dalek" 3 1 50 50 50 70 0 'D'
+    let lookState =
+        { state 6 3 with
+            Map = dungeon
+            Player = actor 0 "scavenger" 1 1 100 100 100 100 0 '@'
+            Monsters = [ lookoutMonster ] }
+        |> computeVisibility
+
+    let opened =
+        applyIntent inertServices OpenLook (session lookState)
+        |> fun transition -> transition.NextSession.Value
+
+    let atMonster =
+        applyIntent inertServices (MoveCursor(1, 0)) opened
+        |> fun transition -> transition.NextSession.Value
+
+    let atWall =
+        applyIntent inertServices Confirm atMonster
+        |> fun transition -> transition.NextSession.Value
+
+    let closed =
+        applyIntent inertServices Confirm atWall
+        |> fun transition -> transition.NextSession.Value
+
+    atMonster.Modal |> should equal (LookMode { X = 3; Y = 1 })
+    atWall.Modal |> should equal (LookMode { X = 5; Y = 1 })
+    closed.Modal |> should equal NoModal
+
+[<Fact>]
 let ``melee kill grants player the monster max hp boost`` () =
     let injuredPlayer = actor 0 "scavenger" 1 1 80 100 100 100 0 '@'
     let target = actor 1 "Cyberman" 2 1 10 30 50 70 0 'C'
@@ -287,30 +325,90 @@ let ``ranged attack stops at walls and does not hit monsters beyond them`` () =
     let game =
         { state 5 1 with
             Map = dungeon
-            Player = actor 0 "scavenger" 0 0 100 100 100 100 0 '@'
-            PlayerWeapon = weapon "Rusty raygun" 8 20 (Some 3)
+            Player =
+                actor 0 "scavenger" 0 0 100 100 100 100 0 '@'
+                |> withWeapons (weapon "Rusty knife" 1 10 None) (weapon "Rusty raygun" 8 20 (Some 3))
             Monsters = [ target ] }
 
     let next = update (FireAt { X = 4; Y = 0 }) game
 
     next.Messages.Head |> should equal "Your Rusty raygun blasts the wall."
-    next.PlayerWeapon.Ammo |> should equal (Some 2)
+    next.Player.RangedWeapon.Ammo |> should equal (Some 2)
     next.Monsters.Head.Hp |> should equal 50
 
 [<Fact>]
 let ``ranged attack consumes ammo on hit`` () =
-    let target = actor 1 "Dalek" 3 0 250 250 50 70 0 'D'
+    let target = actor 1 "Dalek" 3 0 70 70 50 70 0 'D'
     let game =
         { state 5 1 with
-            Player = actor 0 "scavenger" 0 0 100 100 100 100 0 '@'
-            PlayerWeapon = weapon "Rusty raygun" 8 20 (Some 2)
+            Player =
+                actor 0 "scavenger" 0 0 100 100 100 100 0 '@'
+                |> withWeapons (weapon "Rusty knife" 1 10 None) (weapon "Rusty raygun" 8 20 (Some 2))
             Monsters = [ target ] }
 
     let next = update (FireAt { X = 3; Y = 0 }) game
 
-    next.PlayerWeapon.Ammo |> should equal (Some 1)
+    next.Player.RangedWeapon.Ammo |> should equal (Some 1)
     next.Monsters.Head.Hp |> should equal 50
     next.Messages.Head |> should equal "You shoot the Dalek."
+
+[<Fact>]
+let ``player ranged attack emits a projectile path to the first blocker`` () =
+    let dungeon = map 5 1 Floor
+    let target =
+        actor 1 "Dalek" 3 0 50 50 50 70 0 'D'
+
+    let startSession =
+        { State =
+            { state 5 1 with
+                Player =
+                    actor 0 "scavenger" 0 0 100 100 100 100 0 '@'
+                    |> withWeapons (weapon "Rusty knife" 1 10 None) (weapon "Rusty raygun" 8 20 (Some 2))
+                Monsters = [ target ] }
+          Modal = NoModal
+          History = [] }
+
+    let transition = applyIntent inertServices (Act(FireAt { X = 4; Y = 0 })) startSession
+
+    transition.Events
+    |> List.exists (function
+        | AnimateProjectile path -> path = [ { X = 1; Y = 0 }; { X = 2; Y = 0 }; { X = 3; Y = 0 } ]
+        | _ -> false)
+    |> should equal true
+
+[<Fact>]
+let ``player ranged attack animation continues to range limit on a miss`` () =
+    let startSession =
+        { State =
+            { state 8 1 with
+                Player =
+                    actor 0 "scavenger" 0 0 100 100 100 100 0 '@'
+                    |> withWeapons (weapon "Rusty knife" 1 10 None) (weapon "Rusty raygun" 5 20 (Some 2)) }
+          Modal = NoModal
+          History = [] }
+
+    let transition = applyIntent inertServices (Act(FireAt { X = 2; Y = 0 })) startSession
+
+    transition.Events
+    |> List.exists (function
+        | AnimateProjectile path ->
+            path = [ { X = 1; Y = 0 }; { X = 2; Y = 0 }; { X = 3; Y = 0 }; { X = 4; Y = 0 }; { X = 5; Y = 0 } ]
+        | _ -> false)
+    |> should equal true
+
+[<Fact>]
+let ``ranged attack that cannot reach a monster reports falls short`` () =
+    let target = actor 1 "Dalek" 6 0 50 50 50 70 0 'D'
+    let game =
+        { state 8 1 with
+            Player =
+                actor 0 "scavenger" 0 0 100 100 100 100 0 '@'
+                |> withWeapons (weapon "Rusty knife" 1 10 None) (weapon "Rusty raygun" 5 20 (Some 2))
+            Monsters = [ target ] }
+
+    let next = update (FireAt { X = 5; Y = 0 }) game
+
+    next.Messages.Head |> should equal "Your Rusty raygun falls short of the Dalek."
 
 [<Fact>]
 let ``moving onto the tardis generates the next world`` () =
@@ -397,13 +495,25 @@ let ``load game failure reports an error message`` () =
         failwith "Load should not exit the game."
 
 [<Fact>]
+let ``pressing quit while dead exits immediately`` () =
+    let deadSession =
+        session
+            { state 3 3 with
+                Player = actor 0 "scavenger" 1 1 0 100 100 100 0 '@' }
+
+    let transition = applyIntent inertServices Quit deadSession
+
+    transition.NextSession |> should equal None
+
+[<Fact>]
 let ``target mode confirm out of range does not fire`` () =
     let distantMonster = actor 1 "Dalek" 8 1 50 50 50 70 0 'D'
     let targetSession =
         { State =
             { state 10 3 with
-                Player = actor 0 "scavenger" 1 1 100 100 100 100 0 '@'
-                PlayerWeapon = weapon "Rusty raygun" 3 20 None
+                Player =
+                    actor 0 "scavenger" 1 1 100 100 100 100 0 '@'
+                    |> withWeapons (weapon "Rusty knife" 1 10 None) (weapon "Rusty raygun" 3 20 None)
                 Monsters = [ distantMonster ] }
           Modal = TargetMode { X = 8; Y = 1 }
           History = [] }
@@ -417,6 +527,85 @@ let ``target mode confirm out of range does not fire`` () =
         nextSession.Modal |> should equal NoModal
     | None ->
         failwith "Target confirmation should not exit the game."
+
+[<Fact>]
+let ``target mode directional input fires immediately and closes`` () =
+    let dalek = actor 1 "Dalek" 4 1 50 50 50 70 0 'D'
+    let targetSession =
+        { State =
+            { state 8 3 with
+                Player =
+                    actor 0 "scavenger" 1 1 100 100 100 100 0 '@'
+                    |> withWeapons (weapon "Rusty knife" 1 10 None) (weapon "Rusty raygun" 5 20 (Some 2))
+                Monsters = [ dalek ] }
+          Modal = TargetMode { X = 1; Y = 1 }
+          History = [] }
+
+    let transition = applyIntent inertServices (MoveCursor(1, 0)) targetSession
+
+    match transition.NextSession with
+    | Some nextSession ->
+        nextSession.Modal |> should equal NoModal
+        nextSession.State.Monsters.Head.Hp |> should equal 30
+        transition.Events
+        |> List.exists (function
+            | AnimateProjectile path -> path = [ { X = 2; Y = 1 }; { X = 3; Y = 1 }; { X = 4; Y = 1 } ]
+            | _ -> false)
+        |> should equal true
+    | None ->
+        failwith "Directional fire should not exit the game."
+
+[<Fact>]
+let ``monster ranged fire can hit another monster standing in the way`` () =
+    let dalek =
+        actor 1 "Dalek" 0 0 50 50 100 100 0 'D'
+        |> withWeapons
+            (weapon "Plunger" 1 10 None)
+            (weapon "Exterminator" 6 30 (Some 2))
+
+    let cyberman =
+        actor 2 "Cyberman" 1 0 30 30 100 100 0 'C'
+        |> withWeapons (weapon "Rusty knife" 1 10 None) (weapon "Rusty raygun" 8 20 None)
+
+    let game =
+        { state 5 1 with
+            Player = actor 0 "scavenger" 4 0 100 100 100 100 0 '@'
+            Monsters = [ dalek; cyberman ] }
+
+    let next = runMonsterTurn game
+    let dalekAfter = next.Monsters |> List.find (fun monster -> monster.Id = 1)
+
+    next.Monsters |> List.exists (fun monster -> monster.Id = 2) |> should equal false
+    dalekAfter.RangedWeapon.Ammo |> should equal (Some 1)
+    next.Player.Hp |> should equal 100
+    next.Messages.Head |> should equal "The Dalek shoots at you and blasts the Cyberman apart."
+
+[<Fact>]
+let ``player and monster ranged shots animate and share one message line for the turn`` () =
+    let dalek =
+        actor 1 "Dalek" 3 0 50 50 100 100 0 'D'
+        |> withWeapons
+            (weapon "Plunger" 1 10 None)
+            (weapon "Exterminator" 6 20 (Some 2))
+
+    let startSession =
+        { State =
+            { state 8 1 with
+                Player =
+                    actor 0 "scavenger" 0 0 100 100 100 100 0 '@'
+                    |> withWeapons (weapon "Rusty knife" 1 10 None) (weapon "Rusty raygun" 6 20 (Some 2))
+                Monsters = [ dalek ] }
+          Modal = NoModal
+          History = [] }
+
+    let transition = applyIntent inertServices (Act(FireAt { X = 6; Y = 0 })) startSession
+    let nextSession = transition.NextSession.Value
+
+    nextSession.State.Messages.Head |> should equal "You shoot the Dalek. The Dalek shoots you."
+    nextSession.State.Player.Hp |> should equal 80
+    nextSession.State.Monsters.Head.Hp |> should equal 30
+    (transition.Events |> List.filter (function | AnimateProjectile _ -> true | _ -> false) |> List.length)
+    |> should equal 2
 
 [<Fact>]
 let ``time shifter prompt edits digits and cancel closes it`` () =

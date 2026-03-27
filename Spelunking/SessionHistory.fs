@@ -14,6 +14,7 @@ let private recordsHistory command =
 let pushHistory state history =
     state :: history |> List.truncate 10
 
+
 let recordAction command session =
     let history =
         if recordsHistory command then

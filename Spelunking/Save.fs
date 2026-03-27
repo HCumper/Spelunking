@@ -8,6 +8,13 @@ open Spelunk.Model
 
 module Dto =
     [<CLIMutable>]
+    type SaveWeapon =
+        { Name: string
+          Range: int
+          Damage: int
+          Ammo: int option }
+
+    [<CLIMutable>]
     type SaveActor =
         { Id: int
           Name: string
@@ -18,15 +25,10 @@ module Dto =
           Speed: int
           Strength: int
           Energy: int
+          MeleeWeapon: SaveWeapon
+          RangedWeapon: SaveWeapon
           Glyph: string
           SpeechCue: string option }
-
-    [<CLIMutable>]
-    type SaveWeapon =
-        { Name: string
-          Range: int
-          Damage: int
-          Ammo: int option }
 
     [<CLIMutable>]
     type SaveGameState =
@@ -36,7 +38,6 @@ module Dto =
           MapHeight: int
           TilesRle: string
           Player: SaveActor
-          PlayerWeapon: SaveWeapon
           Monsters: SaveActor list
           VisibleTilesRle: string
           ExploredTilesRle: string
@@ -69,6 +70,18 @@ let private charToTile glyph =
     | 'T' -> Tardis
     | other -> invalidOp $"Unsupported tile glyph '{other}' in save file."
 
+let private weaponToSave (weapon: Weapon) : Dto.SaveWeapon =
+    { Name = weapon.Name
+      Range = weapon.Range
+      Damage = weapon.Damage
+      Ammo = weapon.Ammo }
+
+let private weaponFromSave (weapon: Dto.SaveWeapon) : Weapon =
+    { Name = weapon.Name
+      Range = weapon.Range
+      Damage = weapon.Damage
+      Ammo = weapon.Ammo }
+
 let private actorToSave (actor: Actor) : Dto.SaveActor =
     { Id = actor.Id
       Name = actor.Name
@@ -79,6 +92,8 @@ let private actorToSave (actor: Actor) : Dto.SaveActor =
       Speed = actor.Speed
       Strength = actor.Strength
       Energy = actor.Energy
+      MeleeWeapon = weaponToSave actor.MeleeWeapon
+      RangedWeapon = weaponToSave actor.RangedWeapon
       Glyph = string actor.Glyph
       SpeechCue = actor.SpeechCue }
 
@@ -91,24 +106,14 @@ let private actorFromSave (actor: Dto.SaveActor) : Actor =
       Speed = actor.Speed
       Strength = actor.Strength
       Energy = actor.Energy
+      MeleeWeapon = weaponFromSave actor.MeleeWeapon
+      RangedWeapon = weaponFromSave actor.RangedWeapon
       Glyph =
         match actor.Glyph with
         | null
         | "" -> '?'
         | value -> value[0]
       SpeechCue = actor.SpeechCue }
-
-let private weaponToSave (weapon: Weapon) : Dto.SaveWeapon =
-    { Name = weapon.Name
-      Range = weapon.Range
-      Damage = weapon.Damage
-      Ammo = weapon.Ammo }
-
-let private weaponFromSave (weapon: Dto.SaveWeapon) : Weapon =
-    { Name = weapon.Name
-      Range = weapon.Range
-      Damage = weapon.Damage
-      Ammo = weapon.Ammo }
 
 let private encodeRuns (glyphs: char seq) : string =
     let folder (parts: string list, current: char option, count: int) glyph =
@@ -195,7 +200,6 @@ let private stateToSave (state: GameState) : Dto.SaveGameState =
       MapHeight = state.Map.Height
       TilesRle = mapToRle state.Map
       Player = actorToSave state.Player
-      PlayerWeapon = weaponToSave state.PlayerWeapon
       Monsters = state.Monsters |> List.map actorToSave
       VisibleTilesRle = gridToRle state.VisibleTiles
       ExploredTilesRle = gridToRle state.ExploredTiles
@@ -206,7 +210,6 @@ let private stateFromSave (state: Dto.SaveGameState) : GameState =
       TurnCount = state.TurnCount
       Map = mapFromRle state.MapWidth state.MapHeight state.TilesRle
       Player = actorFromSave state.Player
-      PlayerWeapon = weaponFromSave state.PlayerWeapon
       Monsters = state.Monsters |> List.map actorFromSave
       VisibleTiles = rleToGrid state.MapHeight state.MapWidth state.VisibleTilesRle
       ExploredTiles = rleToGrid state.MapHeight state.MapWidth state.ExploredTilesRle
@@ -214,7 +217,7 @@ let private stateFromSave (state: Dto.SaveGameState) : GameState =
 
 let saveGame (state: GameState) (history: GameState list) : unit =
     let payload : Dto.SaveSession =
-        { Version = 1
+        { Version = 2
           State = stateToSave state
           History = history |> List.map stateToSave }
 

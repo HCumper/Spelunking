@@ -53,7 +53,8 @@ type MonsterTemplate =
       Strength: int
       Accuracy: int
       VisionRadius: int
-      Weapon: string option
+      MeleeWeapon: string option
+      RangedWeapon: string option
       Behavior: string
       OnDeathEffect: string option
       Unique: bool
@@ -98,7 +99,7 @@ let private loadedSettings : Lazy<AppSettings> = lazy (loadSettings ())
 let private parseMonsterCsvLine (line: string) : MonsterTemplate =
     let columns = line.Split(',', StringSplitOptions.TrimEntries)
 
-    if columns.Length <> 16 then
+    if columns.Length <> 17 then
         invalidOp $"Invalid monster CSV row: '{line}'"
 
     let parseInt fieldName (value: string) =
@@ -132,12 +133,13 @@ let private parseMonsterCsvLine (line: string) : MonsterTemplate =
       Strength = parseInt "Strength" columns[7]
       Accuracy = parseInt "Accuracy" columns[8]
       VisionRadius = parseInt "VisionRadius" columns[9]
-      Weapon = parseOptionalString columns[10]
-      Behavior = columns[11]
-      OnDeathEffect = parseOptionalString columns[12]
-      Unique = parseBool "Unique" columns[13]
-      Description = columns[14]
-      SpeechCue = parseOptionalString columns[15] }
+      MeleeWeapon = parseOptionalString columns[10]
+      RangedWeapon = parseOptionalString columns[11]
+      Behavior = columns[12]
+      OnDeathEffect = parseOptionalString columns[13]
+      Unique = parseBool "Unique" columns[14]
+      Description = columns[15]
+      SpeechCue = parseOptionalString columns[16] }
 
 let private loadMonsters () : MonsterTemplate list =
     let path = Path.Combine(AppContext.BaseDirectory, "Data", "Monsters.csv")
@@ -155,7 +157,7 @@ let private loadMonsters () : MonsterTemplate list =
     | [] -> []
     | header :: rows ->
         let expectedHeader =
-            "Name,MaxHp,Glyph,Frequency,MinWorld,MaxWorld,Speed,Strength,Accuracy,VisionRadius,Weapon,Behavior,OnDeathEffect,Unique,Description,SpeechCue"
+            "Name,MaxHp,Glyph,Frequency,MinWorld,MaxWorld,Speed,Strength,Accuracy,VisionRadius,MeleeWeapon,RangedWeapon,Behavior,OnDeathEffect,Unique,Description,SpeechCue"
 
         if not (header.Equals(expectedHeader, StringComparison.OrdinalIgnoreCase)) then
             invalidOp $"Invalid monster CSV header. Expected '{expectedHeader}'."
@@ -252,9 +254,21 @@ let defaultFontSize () : IFont.Sizes =
 let monsterTemplates () : MonsterTemplate list =
     loadedMonsters.Value
 
-let defaultWeaponTemplate () : WeaponTemplate =
-    match loadedWeapons.Value with
-    | weapon :: _ ->
-        weapon
-    | [] ->
-        invalidOp "Data/Weapons.csv must define at least one weapon."
+let weaponTemplateByName (name: string) : WeaponTemplate option =
+    loadedWeapons.Value
+    |> List.tryFind (fun weapon -> weapon.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+
+let private defaultWeaponTemplateBy predicate errorMessage =
+    match loadedWeapons.Value |> List.tryFind predicate with
+    | Some weapon -> weapon
+    | None -> invalidOp errorMessage
+
+let defaultMeleeWeaponTemplate () : WeaponTemplate =
+    defaultWeaponTemplateBy
+        (fun weapon -> weapon.Range = 1)
+        "Data/Weapons.csv must define at least one melee weapon with range 1."
+
+let defaultRangedWeaponTemplate () : WeaponTemplate =
+    defaultWeaponTemplateBy
+        (fun weapon -> weapon.Range > 1)
+        "Data/Weapons.csv must define at least one ranged weapon with range greater than 1."

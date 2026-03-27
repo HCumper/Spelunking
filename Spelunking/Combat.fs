@@ -16,7 +16,7 @@ let attack attacker target =
     clampHp target (target.Hp - damageFor attacker)
 
 let attackWithWeapon weapon target =
-    clampHp target (target.Hp - (10 * max 1 weapon.Damage))
+    clampHp target (target.Hp - max 1 weapon.Damage)
 
 let addAmmo weapon delta =
     { weapon with

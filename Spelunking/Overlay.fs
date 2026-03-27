@@ -38,7 +38,7 @@ let private monsterAt point state =
 let private targetInRange target state =
     let dx = target.X - state.Player.Position.X
     let dy = target.Y - state.Player.Position.Y
-    max (abs dx) (abs dy) <= state.PlayerWeapon.Range
+    max (abs dx) (abs dy) <= state.Player.RangedWeapon.Range
 
 let private describePoint point state =
     if point = state.Player.Position then
@@ -79,16 +79,16 @@ let overlayViewModel session =
                       Title = "LOOK MODE"
                       Lines =
                         [ describePoint cursor session.State
-                          "Choose a direction. First visible feature is shown. Enter or Esc closes." ] } }
+                          "Choose a direction. Enter looks farther along that line. Esc closes." ] } }
     | TargetMode cursor ->
         let targetText =
             match monsterAt cursor session.State with
             | Some monster when targetInRange cursor session.State ->
-                sprintf "%s ready: %s at (%d,%d)." session.State.PlayerWeapon.Name monster.Name cursor.X cursor.Y
+                sprintf "%s ready: %s at (%d,%d)." session.State.Player.RangedWeapon.Name monster.Name cursor.X cursor.Y
             | Some monster ->
-                sprintf "%s is out of range for %s." monster.Name session.State.PlayerWeapon.Name
+                sprintf "%s is out of range for %s." monster.Name session.State.Player.RangedWeapon.Name
             | None ->
-                sprintf "Aim %s at (%d,%d)." session.State.PlayerWeapon.Name cursor.X cursor.Y
+                sprintf "Aim %s at (%d,%d)." session.State.Player.RangedWeapon.Name cursor.X cursor.Y
 
         Some
             { Cursor =
@@ -103,7 +103,7 @@ let overlayViewModel session =
                       Title = "TARGET MODE"
                       Lines =
                         [ targetText
-                          "Move cursor. Enter confirms. Esc closes." ] } }
+                          "Choose a direction to fire. Esc closes." ] } }
     | InventoryMode ->
         Some
             { Cursor = None

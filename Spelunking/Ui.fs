@@ -1,6 +1,7 @@
 (* SadConsole presentation layer: panel layout, camera control, input polling, and draggable splitters. *)
 module Spelunk.Ui
 
+open System
 open SadConsole
 open SadConsole.Input
 open SadRogue.Primitives
@@ -235,7 +236,7 @@ type DividerPanel(width, height, glyph, onPress: MouseScreenObjectState -> unit,
 type StatsPanel(windowHeight) =
     inherit ScreenSurface(statsWidth, windowHeight)
 
-    member this.Render(session, camera) =
+    member this.Render(session: Session, camera) =
         clearSurface this
         let width = this.Surface.Width
         let height = this.Surface.Height
@@ -257,7 +258,7 @@ type StatsPanel(windowHeight) =
 type CavernPanel(viewportWidth, viewportHeight) =
     inherit ScreenSurface(viewportWidth, viewportHeight)
 
-    member this.Render(session, camera) =
+    member this.Render(session: Session, camera) =
         clearSurface this
         let width = this.Surface.Width
         let height = this.Surface.Height
@@ -288,7 +289,7 @@ type CavernPanel(viewportWidth, viewportHeight) =
 type MessagesPanel(viewportWidth) =
     inherit ScreenSurface(viewportWidth, logRows)
 
-    member this.Render(session) =
+    member this.Render(session: Session) =
         clearSurface this
         let height = this.Surface.Height
 
@@ -305,7 +306,7 @@ type MessagesPanel(viewportWidth) =
 type OverlayPanelSurface(viewportWidth, viewportHeight) =
     inherit ScreenSurface(viewportWidth, viewportHeight)
 
-    member this.Render(session, camera) =
+    member this.Render(session: Session, camera) =
         clearOverlaySurface this
         let width = this.Surface.Width
         let height = this.Surface.Height
@@ -361,6 +362,8 @@ type RootScreen(screenWidth, screenHeight) as this =
     let mutable requestRedraw = (fun () -> ())
     let mutable activeDrag: string option = None
     let mutable spokenMonsterIds: Set<int> = Set.empty
+    let mutable projectileAnimation: (Position list * int * TimeSpan) option = None
+    let projectileFrameDuration = TimeSpan.FromMilliseconds 35.0
     let statsPanel = new StatsPanel(screenHeight)
     let verticalDivider =
         new DividerPanel(
@@ -451,6 +454,16 @@ type RootScreen(screenWidth, screenHeight) as this =
         statsPanel.Render(session, camera)
         verticalDivider.Render()
         cavernPanel.Render(session, camera)
+
+        match projectileAnimation with
+        | Some (path, index, _) when index >= 0 && index < path.Length ->
+            let position = path[index]
+
+            if isVisible viewportWidth viewportHeight position camera then
+                let screenPosition = toScreenPosition camera position
+                paintCell cavernPanel screenPosition.X screenPosition.Y '*' Color.Gold Color.Black
+        | _ -> ()
+
         horizontalDivider.Render()
         messagesPanel.Render(session)
         overlayPanel.Render(session, camera)
@@ -473,7 +486,14 @@ type RootScreen(screenWidth, screenHeight) as this =
         transition.Events
         |> List.iter (function
             | PlaySound _ -> ()
-            | SpeakText text -> services.Speak text)
+            | SpeakText text -> services.Speak text
+            | AnimateProjectile _ -> ())
+        
+        transition.Events
+        |> List.iter (function
+            | AnimateProjectile path when not path.IsEmpty ->
+                projectileAnimation <- Some(path, 0, TimeSpan.Zero)
+            | _ -> ())
 
         let newlySeenSpeakingMonsters =
             session.State.Monsters
@@ -520,8 +540,34 @@ type RootScreen(screenWidth, screenHeight) as this =
         redraw ()
 
     override _.ProcessKeyboard(keyboard: Keyboard) =
-        match tryGetIntent session keyboard with
-        | Some intent ->
-            intent |> normalizeIntent session |> applyIntentAndRedraw
-            true
-        | None -> base.ProcessKeyboard(keyboard)
+        match projectileAnimation with
+        | Some _ -> true
+        | None ->
+            match tryGetIntent session keyboard with
+            | Some intent ->
+                intent |> normalizeIntent session |> applyIntentAndRedraw
+                true
+            | None -> base.ProcessKeyboard(keyboard)
+
+    override _.Update(delta: TimeSpan) =
+        match projectileAnimation with
+        | Some (path, index, elapsed) ->
+            let totalElapsed = elapsed + delta
+            let advancedFrames = int (totalElapsed.Ticks / projectileFrameDuration.Ticks)
+            let remainingTicks = totalElapsed.Ticks % projectileFrameDuration.Ticks
+
+            if advancedFrames > 0 then
+                let nextIndex = index + advancedFrames
+
+                projectileAnimation <-
+                    if nextIndex >= path.Length then
+                        None
+                    else
+                        Some(path, nextIndex, TimeSpan.FromTicks remainingTicks)
+
+                redraw ()
+            else
+                projectileAnimation <- Some(path, index, totalElapsed)
+        | None -> ()
+
+        base.Update(delta)

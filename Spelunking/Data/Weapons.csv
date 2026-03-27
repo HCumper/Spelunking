@@ -1,9 +1,10 @@
 Name,Range,Damage,Ammo
+Rusty Knife,1,10,
 Rusty Raygun,8,20,40
 Revolver,4,10,80
 Sonic Grenade,3,50,4
 Exterminator,6,30,100
-Light Saber,1,30,10000
-Lirpa,1,30,10000
-Batleath,1,30,10000
-Bullwhip,2,20,10000
+Light Saber,1,30,
+Lirpa,1,30,
+Batleath,1,30,
+Bullwhip,2,20,40

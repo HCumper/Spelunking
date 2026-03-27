@@ -8,6 +8,12 @@ type Tile =
     | Floor
     | Tardis
 
+type Weapon =
+    { Name: string
+      Range: int
+      Damage: int
+      Ammo: int option }
+
 type Actor =
     { Id: int
       Name: string
@@ -17,14 +23,10 @@ type Actor =
       Speed: int
       Strength: int
       Energy: int
+      MeleeWeapon: Weapon
+      RangedWeapon: Weapon
       Glyph: char
       SpeechCue: string option }
-
-type Weapon =
-    { Name: string
-      Range: int
-      Damage: int
-      Ammo: int option }
 
 type Map =
     { Width: int
@@ -36,7 +38,6 @@ type GameState =
       TurnCount: int
       Map: Map
       Player: Actor
-      PlayerWeapon: Weapon
       Monsters: Actor list
       VisibleTiles: bool[,]
       ExploredTiles: bool[,]

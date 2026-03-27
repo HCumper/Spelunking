@@ -5,6 +5,15 @@ open Spelunk.Combat
 open Spelunk.Messages
 open Spelunk.Model
 
+type UpdateResult =
+    { State: GameState
+      ProjectilePaths: Position list list }
+
+type MonsterTurnResult =
+    { State: GameState
+      Notes: string list
+      ProjectilePaths: Position list list }
+
 let tileAt map point =
     map.Tiles[point.Y, point.X]
 
@@ -64,67 +73,227 @@ let private lineBetween startPoint endPoint =
 
     loop startPoint.X startPoint.Y (dx - dy) []
 
-let private tryFireAt target state =
-    let weapon = state.PlayerWeapon
+let private updateMonsterInState monster state =
+    { state with
+        Monsters =
+            state.Monsters
+            |> List.map (fun current -> if current.Id = monster.Id then monster else current) }
 
+let private removeMonsterById monsterId state =
+    { state with
+        Monsters = state.Monsters |> List.filter (fun current -> current.Id <> monsterId) }
+
+let private actorAlongPath shooterId point state =
+    if state.Player.Id <> shooterId && state.Player.Position = point then
+        Some state.Player
+    else
+        state.Monsters
+        |> List.tryFind (fun actor -> actor.Id <> shooterId && actor.Position = point)
+
+let private projectilePath shooterId origin range target state =
+    let stepX = compare (target.X - origin.X) 0
+    let stepY = compare (target.Y - origin.Y) 0
+
+    let inBounds point =
+        point.X >= 0
+        && point.X < state.Map.Width
+        && point.Y >= 0
+        && point.Y < state.Map.Height
+
+    let rec loop point stepsRemaining acc =
+        if stepsRemaining <= 0 || (stepX = 0 && stepY = 0) then
+            List.rev acc
+        else
+            let nextPoint =
+                { X = point.X + stepX
+                  Y = point.Y + stepY }
+
+            if not (inBounds nextPoint) then
+                List.rev acc
+            else
+                let nextAcc = nextPoint :: acc
+
+                match tileAt state.Map nextPoint with
+                | Wall ->
+                    List.rev nextAcc
+                | _ ->
+                    match actorAlongPath shooterId nextPoint state with
+                    | Some _ -> List.rev nextAcc
+                    | None -> loop nextPoint (stepsRemaining - 1) nextAcc
+
+    loop origin range []
+
+let private firstActorBeyondRange shooterId origin range target state =
+    let stepX = compare (target.X - origin.X) 0
+    let stepY = compare (target.Y - origin.Y) 0
+
+    let inBounds point =
+        point.X >= 0
+        && point.X < state.Map.Width
+        && point.Y >= 0
+        && point.Y < state.Map.Height
+
+    let rec skipToRange point stepsRemaining =
+        if stepsRemaining <= 0 || (stepX = 0 && stepY = 0) then
+            point
+        else
+            let nextPoint =
+                { X = point.X + stepX
+                  Y = point.Y + stepY }
+
+            if not (inBounds nextPoint) then
+                point
+            else
+                skipToRange nextPoint (stepsRemaining - 1)
+
+    let rec find point =
+        let nextPoint =
+            { X = point.X + stepX
+              Y = point.Y + stepY }
+
+        if not (inBounds nextPoint) then
+            None
+        else
+            match tileAt state.Map nextPoint with
+            | Wall -> None
+            | _ ->
+                match actorAlongPath shooterId nextPoint state with
+                | Some actor -> Some actor
+                | None -> find nextPoint
+
+    skipToRange origin range |> find
+
+let private withUpdatedRangedWeapon shooterId weapon state =
+    if shooterId = state.Player.Id then
+        { state with Player = { state.Player with RangedWeapon = weapon } }
+    else
+        state.Monsters
+        |> List.tryFind (fun monster -> monster.Id = shooterId)
+        |> Option.map (fun monster -> updateMonsterInState { monster with RangedWeapon = weapon } state)
+        |> Option.defaultValue state
+
+let private applyRangedHit shooterId shooterName weapon targetPoint targetActor state =
+    let wounded = attackWithWeapon weapon targetActor
+    let stateWithAmmo = withUpdatedRangedWeapon shooterId (addAmmo weapon -1) state
+
+    if targetActor.Id = state.Player.Id then
+        let message =
+            if wounded.Hp <= 0 then
+                sprintf "%s kills you." shooterName
+            else
+                sprintf "%s shoots you." shooterName
+
+        { stateWithAmmo with Player = wounded }, message
+    else
+        let woundedState =
+            if wounded.Hp <= 0 then
+                removeMonsterById targetActor.Id stateWithAmmo
+            else
+                updateMonsterInState wounded stateWithAmmo
+
+        let player =
+            if shooterId = state.Player.Id && wounded.Hp <= 0 then
+                clampHp woundedState.Player (woundedState.Player.Hp + killBoost targetActor.MaxHp)
+            else
+                woundedState.Player
+
+        let message =
+            if shooterId = state.Player.Id then
+                if wounded.Hp <= 0 then
+                    sprintf "You blast the %s apart." targetActor.Name
+                else
+                    sprintf "You shoot the %s." targetActor.Name
+            else if targetPoint = state.Player.Position then
+                if wounded.Hp <= 0 then
+                    sprintf "%s shoots at you and blasts the %s apart." shooterName targetActor.Name
+                else
+                    sprintf "%s shoots at you but hits the %s." shooterName targetActor.Name
+            else if wounded.Hp <= 0 then
+                sprintf "%s blasts the %s apart." shooterName targetActor.Name
+            else
+                sprintf "%s shoots the %s." shooterName targetActor.Name
+
+        { woundedState with Player = player }, message
+
+let private tryFire shooterId shooterName origin weapon target state =
     match weapon.Ammo with
     | Some ammo when ammo <= 0 ->
-        addMessage (sprintf "%s is out of ammo." weapon.Name) state
+        state, Some(sprintf "%s is out of ammo." weapon.Name), None
+    | _ when chebyshevDistance origin target > weapon.Range ->
+        state, Some(sprintf "%s cannot reach that far." weapon.Name), None
     | _ ->
-        let playerPos = state.Player.Position
+        let path = projectilePath shooterId origin weapon.Range target state
 
-        if chebyshevDistance playerPos target > weapon.Range then
-            addMessage (sprintf "%s cannot reach that far." weapon.Name) state
-        else
-            // Hitscan shots stop at the first wall or monster along the traced line.
-            let path =
-                lineBetween playerPos target
-                |> List.tail
+        let rec resolve remaining currentState =
+            match remaining with
+            | [] ->
+                let nextState = withUpdatedRangedWeapon shooterId (addAmmo weapon -1) currentState
+                let message =
+                    match firstActorBeyondRange shooterId origin weapon.Range target currentState with
+                    | Some actor when actor.Id = currentState.Player.Id ->
+                        sprintf "%s's %s falls short of you." shooterName weapon.Name
+                    | Some actor ->
+                        sprintf "%s's %s falls short of the %s." shooterName weapon.Name actor.Name
+                    | None ->
+                        sprintf "%s's %s misses." shooterName weapon.Name
 
-            let rec resolve remaining =
-                match remaining with
-                | [] ->
-                    { state with PlayerWeapon = addAmmo weapon -1 }
-                    |> addMessage (sprintf "Your %s misses." weapon.Name)
-                | point :: tail ->
-                    match tileAt state.Map point with
-                    | Wall ->
-                        { state with PlayerWeapon = addAmmo weapon -1 }
-                        |> addMessage (sprintf "Your %s blasts the wall." weapon.Name)
-                    | _ ->
-                        match actorAt point state.Monsters with
-                        | Some monster ->
-                            let wounded = attackWithWeapon weapon monster
-                            let survivors =
-                                state.Monsters
-                                |> List.filter (fun current -> current.Id <> monster.Id)
+                nextState, Some message, Some path
+            | point :: tail ->
+                match tileAt currentState.Map point with
+                | Wall ->
+                    let nextState = withUpdatedRangedWeapon shooterId (addAmmo weapon -1) currentState
+                    nextState, Some(sprintf "%s's %s blasts the wall." shooterName weapon.Name), Some path
+                | _ ->
+                    match actorAlongPath shooterId point currentState with
+                    | Some targetActor ->
+                        let nextState, message = applyRangedHit shooterId shooterName weapon target targetActor currentState
+                        nextState, Some message, Some path
+                    | None ->
+                        resolve tail currentState
 
-                            let monsters =
-                                if wounded.Hp <= 0 then
-                                    survivors
-                                else
-                                    wounded :: survivors |> List.sortBy (fun actor -> actor.Id)
+        resolve path state
 
-                            let player =
-                                if wounded.Hp <= 0 then
-                                    clampHp state.Player (state.Player.Hp + killBoost monster.MaxHp)
-                                else
-                                    state.Player
+let private tryPlayerFireAt target state =
+    let nextState, message, projectilePath =
+        tryFire
+            state.Player.Id
+            "You"
+            state.Player.Position
+            state.Player.RangedWeapon
+            target
+            state
 
-                            let message =
-                                if wounded.Hp <= 0 then
-                                    sprintf "You blast the %s apart." monster.Name
-                                else
-                                    sprintf "You shoot the %s." monster.Name
+    let stateWithMessage =
+        match message with
+        | Some text when text.StartsWith("You's ") ->
+            addMessage (text.Replace("You's ", "Your ")) nextState
+        | Some text ->
+            addMessage text nextState
+        | None ->
+            nextState
 
-                            { state with
-                                Player = player
-                                PlayerWeapon = addAmmo weapon -1
-                                Monsters = monsters }
-                            |> addMessage message
-                        | None -> resolve tail
+    { State = stateWithMessage
+      ProjectilePaths = projectilePath |> Option.toList }
 
-            resolve path
+let private tryMonsterFireAt monster target state =
+    let nextState, message, projectilePath =
+        tryFire
+            monster.Id
+            (sprintf "The %s" monster.Name)
+            monster.Position
+            monster.RangedWeapon
+            target
+            state
+
+    nextState, message, (projectilePath |> Option.toList)
+
+let private canUseRangedWeapon weapon origin target =
+    weapon.Range > 1
+    && chebyshevDistance origin target <= weapon.Range
+    &&
+    match weapon.Ammo with
+    | Some ammo -> ammo > 0
+    | None -> true
 
 let private updateMonster state monster =
     let playerPos = state.Player.Position
@@ -139,22 +308,25 @@ let private updateMonster state monster =
           Y = monster.Position.Y + stepY }
 
     if destination = playerPos then
-        let player = attack monster state.Player
-        { state with Player = player }, Some(sprintf "The %s hits you." monster.Name)
+        let player = attackWithWeapon monster.MeleeWeapon state.Player
+        { state with Player = player }, Some(sprintf "The %s hits you." monster.Name), []
+    elif canUseRangedWeapon monster.RangedWeapon monster.Position playerPos then
+        let nextState, note, projectilePaths = tryMonsterFireAt monster playerPos state
+        nextState, note, projectilePaths
     else
         let otherMonsters = state.Monsters |> List.filter (fun current -> current.Id <> monster.Id)
 
         match tryMoveActor state.Map otherMonsters monster stepX stepY with
         | Ok moved ->
             let monsters = moved :: otherMonsters |> List.sortBy (fun actor -> actor.Id)
-            { state with Monsters = monsters }, None
+            { state with Monsters = monsters }, None, []
         | Error _ ->
-            state, None
+            state, None, []
 
 let private runMonsterActions state monster =
-    let rec loop currentState currentMonster notes =
+    let rec loop currentState currentMonster notes projectilePaths =
         if currentState.Player.Hp <= 0 || currentMonster.Energy < actionThreshold then
-            currentState, currentMonster, notes
+            currentState, currentMonster, notes, projectilePaths
         else
             // Monsters spend energy in 100-point chunks, so speed below or above 100 acts less or more often than the player.
             let actingMonster = { currentMonster with Energy = currentMonster.Energy - actionThreshold }
@@ -165,7 +337,7 @@ let private runMonsterActions state monster =
                         |> List.map (fun existing ->
                             if existing.Id = actingMonster.Id then actingMonster else existing) }
 
-            let nextState, note = updateMonster monsterState actingMonster
+            let nextState, note, newProjectilePaths = updateMonster monsterState actingMonster
             let nextMonster =
                 nextState.Monsters
                 |> List.tryFind (fun existing -> existing.Id = actingMonster.Id)
@@ -175,9 +347,12 @@ let private runMonsterActions state monster =
                 | Some text -> text :: notes
                 | None -> notes
 
+            let nextProjectilePaths =
+                projectilePaths @ newProjectilePaths
+
             match nextMonster with
-            | Some aliveMonster -> loop nextState aliveMonster nextNotes
-            | None -> nextState, actingMonster, nextNotes
+            | Some aliveMonster -> loop nextState aliveMonster nextNotes nextProjectilePaths
+            | None -> nextState, actingMonster, nextNotes, nextProjectilePaths
 
     let chargedMonster = { monster with Energy = monster.Energy + max 0 monster.Speed }
     let chargedState =
@@ -187,32 +362,39 @@ let private runMonsterActions state monster =
                 |> List.map (fun existing ->
                     if existing.Id = chargedMonster.Id then chargedMonster else existing) }
 
-    loop chargedState chargedMonster []
+    loop chargedState chargedMonster [] []
+
+let runMonsterTurnDetailed state =
+    ((state, [], []), state.Monsters)
+    ||> List.fold (fun (currentState, notes, projectilePaths) monster ->
+        match currentState.Monsters |> List.tryFind (fun existing -> existing.Id = monster.Id) with
+        | Some nextMonster ->
+            let nextState, _, monsterNotes, monsterProjectilePaths = runMonsterActions currentState nextMonster
+            let nextNotes =
+                monsterNotes |> List.rev |> List.append notes
+            let nextProjectilePaths =
+                projectilePaths @ monsterProjectilePaths
+
+            nextState, nextNotes, nextProjectilePaths
+        | None ->
+            currentState, notes, projectilePaths)
+    |> fun (nextState, notes, projectilePaths) ->
+        { State = nextState
+          Notes = List.rev notes
+          ProjectilePaths = projectilePaths }
 
 let runMonsterTurn state =
-    ((state, []), state.Monsters)
-    ||> List.fold (fun (currentState, notes) monster ->
-        let nextMonster =
-            currentState.Monsters
-            |> List.tryFind (fun existing -> existing.Id = monster.Id)
-            |> Option.defaultValue monster
+    let result = runMonsterTurnDetailed state
 
-        let nextState, _, monsterNotes = runMonsterActions currentState nextMonster
-        let nextNotes =
-            monsterNotes |> List.rev |> List.append notes
+    result.Notes
+    |> List.fold (fun acc note -> addMessage note acc) result.State
 
-        nextState, nextNotes)
-    |> fun (nextState, notes) ->
-        notes
-        |> List.rev
-        |> List.fold (fun acc note -> addMessage note acc) nextState
-
-let update command state =
+let updateDetailed command state =
     match command with
     | Wait ->
-        addMessage "You wait and listen." state
+        { State = state; ProjectilePaths = [] }
     | FireAt target ->
-        tryFireAt target state
+        tryPlayerFireAt target state
     | Move (dx, dy) ->
         let destination =
             { X = state.Player.Position.X + dx
@@ -220,7 +402,7 @@ let update command state =
 
         match actorAt destination state.Monsters with
         | Some monster ->
-            let wounded = attack state.Player monster
+            let wounded = attackWithWeapon state.Player.MeleeWeapon monster
             let survivors =
                 state.Monsters
                 |> List.filter (fun current -> current.Id <> monster.Id)
@@ -243,8 +425,16 @@ let update command state =
                 else
                     state.Player
 
-            { state with Player = player; Monsters = monsters } |> addMessage hitMessage
+            { State = { state with Player = player; Monsters = monsters } |> addMessage hitMessage
+              ProjectilePaths = [] }
         | None ->
             match tryMoveActor state.Map state.Monsters state.Player dx dy with
-            | Ok movedPlayer -> { state with Player = movedPlayer }
-            | Error message -> addMessage message state
+            | Ok movedPlayer ->
+                { State = { state with Player = movedPlayer }
+                  ProjectilePaths = [] }
+            | Error message ->
+                { State = addMessage message state
+                  ProjectilePaths = [] }
+
+let update command state =
+    (updateDetailed command state).State

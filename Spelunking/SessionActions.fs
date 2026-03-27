@@ -40,11 +40,33 @@ let private outputEvents previousSession nextSession =
 let private targetInRange target state =
     let dx = target.X - state.Player.Position.X
     let dy = target.Y - state.Player.Position.Y
-    max (abs dx) (abs dy) <= state.PlayerWeapon.Range
+    max (abs dx) (abs dy) <= state.Player.RangedWeapon.Range
 
 let private moveCursor mapWidth mapHeight dx dy cursor =
     { X = max 0 (min (mapWidth - 1) (cursor.X + dx))
       Y = max 0 (min (mapHeight - 1) (cursor.Y + dy)) }
+
+let private directionalTarget dx dy state =
+    let rec advance point stepsRemaining =
+        if stepsRemaining <= 0 then
+            point
+        else
+            let nextPoint =
+                { X = point.X + dx
+                  Y = point.Y + dy }
+
+            let inBounds =
+                nextPoint.X >= 0
+                && nextPoint.X < state.Map.Width
+                && nextPoint.Y >= 0
+                && nextPoint.Y < state.Map.Height
+
+            if not inBounds then
+                point
+            else
+                advance nextPoint (stepsRemaining - 1)
+
+    advance state.Player.Position state.Player.RangedWeapon.Range
 
 let private monsterAt point state =
     state.Monsters |> List.tryFind (fun monster -> monster.Position = point)
@@ -83,11 +105,41 @@ let private firstVisibleInterestingTileInDirection dx dy state =
 
     walk origin
 
+let private nextVisibleInterestingTileBeyondCursor cursor state =
+    let origin = state.Player.Position
+    let dx = compare (cursor.X - origin.X) 0
+    let dy = compare (cursor.Y - origin.Y) 0
+
+    if dx = 0 && dy = 0 then
+        None
+    else
+        let rec walk point =
+            let nextPoint =
+                { X = point.X + dx
+                  Y = point.Y + dy }
+
+            let inBounds =
+                nextPoint.X >= 0
+                && nextPoint.X < state.Map.Width
+                && nextPoint.Y >= 0
+                && nextPoint.Y < state.Map.Height
+
+            if not inBounds then
+                None
+            elif not state.VisibleTiles[nextPoint.Y, nextPoint.X] then
+                None
+            elif isInterestingTile nextPoint state then
+                Some nextPoint
+            else
+                walk nextPoint
+
+        walk cursor
+
 let private applyAction command session =
     let withHistory = SessionHistory.recordAction command session
+    let result = updateDetailed command withHistory.State
 
-    { withHistory with
-        State = update command withHistory.State }
+    { withHistory with State = result.State }, result.ProjectilePaths
 
 let private neighborDirections =
     [ (-1, -1); (0, -1); (1, -1)
@@ -117,14 +169,21 @@ let private followRunDirection state previousPosition currentPosition =
         | [ nextDirection ] -> Some nextDirection
         | _ -> None
 
-let private newlyVisibleMonsterSeen previousState nextState =
-    nextState.Monsters
-    |> List.exists (fun monster ->
-        nextState.VisibleTiles[monster.Position.Y, monster.Position.X]
-        && not previousState.VisibleTiles[monster.Position.Y, monster.Position.X])
+let private visibleMonsterIds state =
+    state.Monsters
+    |> List.filter (fun monster -> state.VisibleTiles[monster.Position.Y, monster.Position.X])
+    |> List.map (fun monster -> monster.Id)
+    |> Set.ofList
 
-let private applyRun dx dy session =
-    let rec loop currentSession currentDx currentDy =
+let private newlyVisibleMonsterSeen previousState nextState =
+    let previouslyVisible = visibleMonsterIds previousState
+
+    nextState
+    |> visibleMonsterIds
+    |> Set.exists (fun monsterId -> not (Set.contains monsterId previouslyVisible))
+
+let private applyRun dx dy (session: Session) =
+    let rec loop (currentSession: Session) currentDx currentDy : Session =
         let nextPosition =
             { X = currentSession.State.Player.Position.X + currentDx
               Y = currentSession.State.Player.Position.Y + currentDy }
@@ -145,7 +204,7 @@ let private applyRun dx dy session =
 
     loop session dx dy
 
-let private saveCurrentSession services session =
+let private saveCurrentSession services (session: Session) =
     try
         services.SaveGame(session.State, session.History)
 
@@ -157,7 +216,7 @@ let private saveCurrentSession services session =
             State = addMessage $"Save failed: {ex.Message}" session.State
             Modal = NoModal }
 
-let private loadSavedSession services session =
+let private loadSavedSession services (session: Session) =
     try
         match services.TryLoadGame () with
         | Some (loadedState, loadedHistory) ->
@@ -180,31 +239,33 @@ let applyIntent services intent session : Transition =
         let mapWidth = session.State.Map.Width
         let mapHeight = session.State.Map.Height
 
-        let nextSession =
+        let nextSession, projectilePaths =
             match session.Modal, intent with
+            | NoModal, Quit when session.State.Player.Hp <= 0 ->
+                session, []
             | NoModal, Quit ->
-                { session with Modal = QuitConfirm }
+                { session with Modal = QuitConfirm }, []
             | QuitConfirm, Confirm ->
-                session
+                session, []
             | QuitConfirm, Cancel
             | QuitConfirm, Quit ->
-                { session with Modal = NoModal }
+                { session with Modal = NoModal }, []
             | NoModal, Act command ->
                 applyAction command session
             | NoModal, Run (dx, dy) ->
-                applyRun dx dy session
+                applyRun dx dy session, []
             | NoModal, UseTimeShifter ->
-                { session with Modal = TimeShiftPrompt "" }
+                { session with Modal = TimeShiftPrompt "" }, []
             | NoModal, SaveGame ->
-                saveCurrentSession services session
+                saveCurrentSession services session, []
             | NoModal, LoadGame ->
-                loadSavedSession services session
+                loadSavedSession services session, []
             | NoModal, OpenLook ->
-                { session with Modal = LookMode session.State.Player.Position }
+                { session with Modal = LookMode session.State.Player.Position }, []
             | NoModal, OpenTarget ->
-                { session with Modal = TargetMode session.State.Player.Position }
+                { session with Modal = TargetMode session.State.Player.Position }, []
             | NoModal, OpenInventory ->
-                { session with Modal = InventoryMode }
+                { session with Modal = InventoryMode }, []
             | LookMode cursor, MoveCursor (dx, dy) ->
                 let nextSession =
                     match firstVisibleInterestingTileInDirection dx dy session.State with
@@ -215,12 +276,21 @@ let applyIntent services intent session : Transition =
                             State = addMessage "You can see nothing there." session.State
                             Modal = LookMode cursor }
 
-                nextSession
-            | LookMode _, Confirm
+                nextSession, []
+            | LookMode cursor, Confirm ->
+                match nextVisibleInterestingTileBeyondCursor cursor session.State with
+                | Some nextCursor ->
+                    { session with Modal = LookMode nextCursor }, []
+                | None ->
+                    { session with Modal = NoModal }, []
             | LookMode _, Cancel ->
-                { session with Modal = NoModal }
+                { session with Modal = NoModal }, []
+            | TargetMode _, MoveCursor (dx, dy) when dx <> 0 || dy <> 0 ->
+                let target = directionalTarget dx dy session.State
+                let updatedSession, projectilePaths = applyAction (FireAt target) session
+                { updatedSession with Modal = NoModal }, projectilePaths
             | TargetMode cursor, MoveCursor (dx, dy) ->
-                { session with Modal = TargetMode(moveCursor mapWidth mapHeight dx dy cursor) }
+                { session with Modal = TargetMode(moveCursor mapWidth mapHeight dx dy cursor) }, []
             | TargetMode cursor, Confirm ->
                 let updatedSession =
                     if targetInRange cursor session.State then
@@ -229,20 +299,22 @@ let applyIntent services intent session : Transition =
                         { session with
                             State =
                                 addMessage
-                                    (sprintf "%s cannot reach that far." session.State.PlayerWeapon.Name)
-                                    session.State }
+                                    (sprintf "%s cannot reach that far." session.State.Player.RangedWeapon.Name)
+                                    session.State },
+                        []
 
-                { updatedSession with Modal = NoModal }
+                let updatedSession, projectilePaths = updatedSession
+                { updatedSession with Modal = NoModal }, projectilePaths
             | TargetMode _, Cancel ->
-                { session with Modal = NoModal }
+                { session with Modal = NoModal }, []
             | InventoryMode, Confirm
             | InventoryMode, Cancel ->
-                { session with Modal = NoModal }
+                { session with Modal = NoModal }, []
             | TimeShiftPrompt turnsText, EnterDigit digit ->
                 if turnsText.Length >= 2 then
-                    session
+                    session, []
                 else
-                    { session with Modal = TimeShiftPrompt(turnsText + string digit) }
+                    { session with Modal = TimeShiftPrompt(turnsText + string digit) }, []
             | TimeShiftPrompt turnsText, EraseDigit ->
                 let nextText =
                     if String.IsNullOrEmpty turnsText then
@@ -250,27 +322,31 @@ let applyIntent services intent session : Transition =
                     else
                         turnsText.Substring(0, turnsText.Length - 1)
 
-                { session with Modal = TimeShiftPrompt nextText }
+                { session with Modal = TimeShiftPrompt nextText }, []
             | TimeShiftPrompt turnsText, Confirm ->
                 match Int32.TryParse turnsText with
                 | true, turns when turns >= 1 ->
-                    SessionHistory.rewindSession turns session
+                    SessionHistory.rewindSession turns session, []
                 | _ ->
                     { session with
                         State = addMessage "Enter a turn count from 1 to 10." session.State
-                        Modal = NoModal }
+                        Modal = NoModal },
+                    []
             | TimeShiftPrompt _, Cancel ->
-                { session with Modal = NoModal }
+                { session with Modal = NoModal }, []
             | _, _ ->
-                session
+                session, []
 
         let nextSessionOption =
             match session.Modal, intent with
+            | NoModal, Quit when session.State.Player.Hp <= 0 -> None
             | QuitConfirm, Confirm -> None
             | _ -> Some nextSession
 
         { NextSession = nextSessionOption
           Events =
             match nextSessionOption with
-            | Some resolved -> outputEvents session resolved
+            | Some resolved ->
+                outputEvents session resolved
+                @ (projectilePaths |> List.map AnimateProjectile)
             | None -> [] }

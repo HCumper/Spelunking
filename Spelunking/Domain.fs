@@ -1,10 +1,21 @@
 (* Composes world generation, simulation, and visibility into the game-facing state transitions. *)
 module Spelunk.Domain
 open Spelunk.Config
+open Spelunk.Messages
 open Spelunk.Model
 open Spelunk.Simulation
 open Spelunk.Visibility
 open Spelunk.World
+
+type DomainUpdateResult =
+    { State: GameState
+      ProjectilePaths: Position list list }
+
+let private weaponFromTemplate (template: WeaponTemplate) =
+    { Name = template.Name
+      Range = template.Range
+      Damage = template.Damage
+      Ammo = template.Ammo }
 
 let createMap () =
     createDungeon () |> fst
@@ -50,7 +61,7 @@ let private chooseWeightedMonsterTemplate
 
         pick 0 eligibleTemplates
 
-let private createWorldState world player weapon messages =
+let private createWorldState world player messages =
     let map, rooms = createDungeon ()
     let spawnPoint =
         rooms
@@ -91,6 +102,18 @@ let private createWorldState world player weapon messages =
             |> List.choose (fun (index, spawnPoint) ->
                 chooseWeightedMonsterTemplate world templates random
                 |> Option.map (fun (template: MonsterTemplate) ->
+                    let meleeWeapon =
+                        template.MeleeWeapon
+                        |> Option.bind weaponTemplateByName
+                        |> Option.defaultValue (defaultMeleeWeaponTemplate ())
+                        |> weaponFromTemplate
+
+                    let rangedWeapon =
+                        template.RangedWeapon
+                        |> Option.bind weaponTemplateByName
+                        |> Option.defaultValue (defaultRangedWeaponTemplate ())
+                        |> weaponFromTemplate
+
                     { Id = index + 1
                       Name = template.Name
                       Position = spawnPoint
@@ -99,6 +122,8 @@ let private createWorldState world player weapon messages =
                       Speed = template.Speed
                       Strength = template.Strength
                       Energy = 0
+                      MeleeWeapon = meleeWeapon
+                      RangedWeapon = rangedWeapon
                       Glyph =
                         match template.Glyph with
                         | null
@@ -110,7 +135,6 @@ let private createWorldState world player weapon messages =
       TurnCount = 0
       Map = map
       Player = { player with Position = spawnPoint; Energy = 0 }
-      PlayerWeapon = weapon
       Monsters = monsters
       VisibleTiles = Array2D.create map.Height map.Width false
       ExploredTiles = Array2D.create map.Height map.Width false
@@ -121,11 +145,11 @@ let private enterTardis state =
     createWorldState
         (state.World + 1)
         state.Player
-        state.PlayerWeapon
         [ "The Tardis hurtles through time and space and re-materialized." ]
 
 let initialState () =
-    let startingWeaponTemplate = defaultWeaponTemplate ()
+    let startingMeleeWeapon = defaultMeleeWeaponTemplate () |> weaponFromTemplate
+    let startingRangedWeapon = defaultRangedWeaponTemplate () |> weaponFromTemplate
     let player =
         { Id = 0
           Name = "scavenger"
@@ -135,6 +159,8 @@ let initialState () =
           Speed = 100
           Strength = 100
           Energy = 0
+          MeleeWeapon = startingMeleeWeapon
+          RangedWeapon = startingRangedWeapon
           Glyph = '@'
           SpeechCue = None }
 
@@ -142,10 +168,6 @@ let initialState () =
         createWorldState
             1
             player
-            { Name = startingWeaponTemplate.Name
-              Range = startingWeaponTemplate.Range
-              Damage = startingWeaponTemplate.Damage
-              Ammo = startingWeaponTemplate.Ammo }
             []
 
     { initial with
@@ -153,13 +175,32 @@ let initialState () =
             "Move with WASD or arrow keys. Press Space to wait. Press Q to quit."
             :: initial.Messages }
 
-let update command state =
-    let resolved = Simulation.update command state
+let private combineTurnMessages command (resolved: GameState) (monsterNotes: string list) (nextState: GameState) =
+    match command, resolved.Messages, monsterNotes with
+    | FireAt _, playerMessage :: priorMessages, firstMonsterNote :: remainingMonsterNotes ->
+        let combinedMessage =
+            String.concat " " (playerMessage :: firstMonsterNote :: remainingMonsterNotes)
 
-    if resolved.Map.Tiles[resolved.Player.Position.Y, resolved.Player.Position.X] = Tardis then
-        enterTardis resolved
+        { nextState with
+            Messages = combinedMessage :: priorMessages |> List.truncate 6 }
+    | _ ->
+        monsterNotes |> List.fold (fun acc note -> addMessage note acc) nextState
+
+let updateDetailed command state =
+    let resolved = Simulation.updateDetailed command state
+
+    if resolved.State.Map.Tiles[resolved.State.Player.Position.Y, resolved.State.Player.Position.X] = Tardis then
+        { State = enterTardis resolved.State
+          ProjectilePaths = resolved.ProjectilePaths }
     else
-        resolved
-        |> runMonsterTurn
-        |> advanceTurn
-        |> computeVisibility
+        let monsterTurn = runMonsterTurnDetailed resolved.State
+        let combinedState =
+            combineTurnMessages command resolved.State monsterTurn.Notes monsterTurn.State
+            |> advanceTurn
+            |> computeVisibility
+
+        { State = combinedState
+          ProjectilePaths = resolved.ProjectilePaths @ monsterTurn.ProjectilePaths }
+
+let update command state =
+    (updateDetailed command state).State
