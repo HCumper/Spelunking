@@ -8,14 +8,28 @@ open Spelunk.Config
 open Spelunk.Ui
 
 let private configureFont (builder: Builder) =
-    match defaultFontPath () with
-    | Some path ->
+    let validatePath description path =
         if not (File.Exists path) then
-            invalidOp $"Configured font file does not exist: {path}"
+            invalidOp $"Configured {description} font file does not exist: {path}"
 
-        builder.ConfigureFonts(path, [||])
+    match tileFontPath () with
+    | Some path ->
+        validatePath "tile" path
+
+        builder.ConfigureFonts(fun (fonts: FontConfig) _ ->
+            fonts.UseBuiltinFontExtended()
+            fonts.AddExtraFonts([| path |]))
     | None ->
         builder.ConfigureFonts(true)
+
+let private tileFont (host: GameHost) : IFont option =
+    match tileFontPath () with
+    | Some path ->
+        let expectedName = Path.GetFileNameWithoutExtension path
+
+        host.Fonts.Values
+        |> Seq.tryFind (fun font -> font.Name = expectedName)
+    | None -> None
 
 [<EntryPoint>]
 let main _ =
@@ -32,7 +46,7 @@ let main _ =
             config.SetWindowSizeInPixels(screenWidth, screenHeight)
             config.Fullscreen <- window.Fullscreen
             config.BorderlessWindowedFullscreen <- window.BorderlessWindowedFullscreen)
-    let builder = builder.SetStartingScreen(fun host -> RootScreen(host.ScreenCellsX, host.ScreenCellsY) :> IScreenObject)
+    let builder = builder.SetStartingScreen(fun host -> RootScreen(host.ScreenCellsX, host.ScreenCellsY, tileFont host) :> IScreenObject)
     let builder = builder.IsStartingScreenFocused(true)
 
     let configuredBuilder = configureFont builder

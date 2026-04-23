@@ -41,6 +41,7 @@ type WindowSettings =
     { Fullscreen: bool
       BorderlessWindowedFullscreen: bool
       FontPath: string option
+      TileFontPath: string option
       DefaultFontSize: string }
 
 type MonsterTemplate =
@@ -241,8 +242,8 @@ let uiSettings () : UiSettings =
 let windowSettings () : WindowSettings =
     (appSettings ()).Window
 
-let defaultFontPath () : string option =
-    (windowSettings ()).FontPath
+let private resolveConfiguredPath (path: string option) : string option =
+    path
     |> Option.bind (fun path ->
         if String.IsNullOrWhiteSpace path then
             None
@@ -253,6 +254,16 @@ let defaultFontPath () : string option =
                 Some trimmed
             else
                 Some(Path.Combine(AppContext.BaseDirectory, trimmed)))
+
+let defaultFontPath () : string option =
+    None
+
+let tileFontPath () : string option =
+    let window = windowSettings ()
+
+    match resolveConfiguredPath window.TileFontPath with
+    | Some path -> Some path
+    | None -> resolveConfiguredPath window.FontPath
 
 let combatSettings () : CombatSettings =
     (appSettings ()).Combat

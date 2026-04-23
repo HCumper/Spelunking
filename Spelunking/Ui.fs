@@ -44,16 +44,20 @@ let private panelLayout width mapHeight style lineCount =
         6, 3, boxWidth, contentHeight
 
 let private clampCameraAxis current focus viewportSize worldSize =
-    let minFocus = current + cameraMargin
-    let maxFocus = current + viewportSize - cameraMargin - 1
+    let effectiveMargin =
+        cameraMargin
+        |> min (max 0 ((viewportSize - 1) / 2))
+
+    let minFocus = current + effectiveMargin
+    let maxFocus = current + viewportSize - effectiveMargin - 1
     let maxCamera = max 0 (worldSize - viewportSize)
 
     // The camera only shifts once the focus point approaches the viewport margin.
     let next =
         if focus < minFocus then
-            focus - cameraMargin
+            focus - effectiveMargin
         elif focus > maxFocus then
-            focus - viewportSize + cameraMargin + 1
+            focus - viewportSize + effectiveMargin + 1
         else
             current
 
@@ -244,6 +248,12 @@ type StatsPanel(windowHeight) =
 type CavernPanel(viewportWidth, viewportHeight) =
     inherit ScreenSurface(viewportWidth, viewportHeight)
 
+    new(viewportWidth, viewportHeight, font: IFont, fontSize: Point) =
+        new CavernPanel(viewportWidth, viewportHeight)
+        then
+            base.Font <- font
+            base.FontSize <- fontSize
+
     member this.Render(session: Session, camera) =
         clearSurface this
         let width = this.Surface.Width
@@ -330,7 +340,7 @@ type OverlayPanelSurface(viewportWidth, viewportHeight) =
 
         this.IsDirty <- true
 
-type RootScreen(screenWidth, screenHeight) as this =
+type RootScreen(screenWidth, screenHeight, tileFont: IFont option) as this =
     inherit ScreenObject()
 
     let dividerThickness = 1
@@ -371,7 +381,13 @@ type RootScreen(screenWidth, screenHeight) as this =
                 match activeDrag with
                 | Some "vertical" -> activeDrag <- None
                 | _ -> ()))
-    let cavernPanel = new CavernPanel(max 1 (screenWidth - statsPanelWidth - dividerThickness), max 1 (screenHeight - dividerThickness - messagesPanelHeight))
+    let cavernPanel =
+        let width = max 1 (screenWidth - statsPanelWidth - dividerThickness)
+        let height = max 1 (screenHeight - dividerThickness - messagesPanelHeight)
+
+        match tileFont with
+        | Some font -> new CavernPanel(width, height, font, font.GetFontSize(Game.Instance.DefaultFontSize))
+        | None -> new CavernPanel(width, height)
     let horizontalDivider =
         new DividerPanel(
             cavernPanel.Surface.Width,
