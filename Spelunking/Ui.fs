@@ -5,6 +5,7 @@ open System
 open SadConsole
 open SadConsole.Input
 open SadRogue.Primitives
+open Spelunk.Appearance
 open Spelunk.Application
 open Spelunk.Config
 open Spelunk.Input
@@ -22,24 +23,6 @@ let private logRows = ui.LogRows
 let private cameraMargin = ui.CameraMargin
 let private panelGap = ui.PanelGap
 
-let private tileGlyph tile =
-    match tile with
-    | Wall -> '#'
-    | Floor -> '.'
-    | Tardis -> 'T'
-
-let private tileForeground tile =
-    match tile with
-    | Wall -> Color.Gray
-    | Floor -> Color.DarkSlateGray
-    | Tardis -> Color.DeepSkyBlue
-
-let private exploredTileForeground tile =
-    match tile with
-    | Wall -> Color.DarkGray
-    | Floor -> Color.DimGray
-    | Tardis -> Color.SteelBlue
-
 let private overlayColor color =
     match color with
     | OverlayColor.Default -> Color.White
@@ -48,8 +31,8 @@ let private overlayColor color =
 
 let private overlayCursorGlyph style =
     match style with
-    | OverlayCursorStyle.InspectCursor -> 'X'
-    | OverlayCursorStyle.TargetCursor -> '*'
+    | OverlayCursorStyle.InspectCursor -> int 'X'
+    | OverlayCursorStyle.TargetCursor -> int '*'
 
 let private panelLayout width mapHeight style lineCount =
     match style with
@@ -91,39 +74,42 @@ let private isVisible viewportWidth viewportHeight worldPosition camera =
     && worldPosition.Y >= camera.Y
     && worldPosition.Y < camera.Y + viewportHeight
 
-let private paintCell (surface: ScreenSurface) x y glyph foreground background =
-    surface.SetGlyph(x, y, int glyph)
+let private paintCell (surface: ScreenSurface) (x: int) (y: int) (glyph: int) foreground background =
+    surface.SetGlyph(x, y, glyph)
     surface.SetForeground(x, y, foreground)
     surface.SetBackground(x, y, background)
+
+let private paintAppearance surface x y (appearance: CellAppearance) =
+    paintCell surface x y appearance.Glyph appearance.Foreground appearance.Background
 
 let private clearSurface (surface: ScreenSurface) =
     for y in 0 .. surface.Surface.Height - 1 do
         for x in 0 .. surface.Surface.Width - 1 do
-            paintCell surface x y ' ' Color.White Color.Black
+            paintCell surface x y (int ' ') Color.White Color.Black
 
 let private clearOverlaySurface (surface: ScreenSurface) =
     for y in 0 .. surface.Surface.Height - 1 do
         for x in 0 .. surface.Surface.Width - 1 do
-            paintCell surface x y ' ' Color.Transparent Color.Transparent
+            paintCell surface x y (int ' ') Color.Transparent Color.Transparent
 
 let private writeText (surface: ScreenSurface) x y foreground text =
     text
     |> Seq.truncate (max 0 (surface.Surface.Width - x))
-    |> Seq.iteri (fun i ch -> paintCell surface (x + i) y ch foreground Color.Black)
+    |> Seq.iteri (fun i ch -> paintCell surface (x + i) y (int ch) foreground Color.Black)
 
 let private drawFrame (surface: ScreenSurface) left top frameWidth frameHeight =
     for x in left .. left + frameWidth - 1 do
-        paintCell surface x top '-' Color.White Color.Black
-        paintCell surface x (top + frameHeight - 1) '-' Color.White Color.Black
+        paintCell surface x top (int '-') Color.White Color.Black
+        paintCell surface x (top + frameHeight - 1) (int '-') Color.White Color.Black
 
     for y in top .. top + frameHeight - 1 do
-        paintCell surface left y '|' Color.White Color.Black
-        paintCell surface (left + frameWidth - 1) y '|' Color.White Color.Black
+        paintCell surface left y (int '|') Color.White Color.Black
+        paintCell surface (left + frameWidth - 1) y (int '|') Color.White Color.Black
 
-    paintCell surface left top '+' Color.White Color.Black
-    paintCell surface (left + frameWidth - 1) top '+' Color.White Color.Black
-    paintCell surface left (top + frameHeight - 1) '+' Color.White Color.Black
-    paintCell surface (left + frameWidth - 1) (top + frameHeight - 1) '+' Color.White Color.Black
+    paintCell surface left top (int '+') Color.White Color.Black
+    paintCell surface (left + frameWidth - 1) top (int '+') Color.White Color.Black
+    paintCell surface left (top + frameHeight - 1) (int '+') Color.White Color.Black
+    paintCell surface (left + frameWidth - 1) (top + frameHeight - 1) (int '+') Color.White Color.Black
 
 let private keyTable : (Key * Keys list) list =
     [ QuitKey, [ Keys.Q ]
@@ -199,8 +185,8 @@ type DividerPanel(width, height, glyph, onPress: MouseScreenObjectState -> unit,
         clearSurface this
 
         for y in 0 .. this.Surface.Height - 1 do
-            for x in 0 .. this.Surface.Width - 1 do
-                paintCell this x y glyph Color.Gray Color.Black
+                for x in 0 .. this.Surface.Width - 1 do
+                    paintCell this x y glyph Color.Gray Color.Black
 
         this.IsDirty <- true
 
@@ -270,19 +256,19 @@ type CavernPanel(viewportWidth, viewportHeight) =
                 let tile = session.State.Map.Tiles[worldY, worldX]
 
                 if session.State.VisibleTiles[worldY, worldX] then
-                    paintCell this screenX screenY (tileGlyph tile) (tileForeground tile) Color.Black
+                    paintAppearance this screenX screenY (tileAppearance tile false)
                 elif session.State.ExploredTiles[worldY, worldX] then
-                    paintCell this screenX screenY (tileGlyph tile) (exploredTileForeground tile) Color.Black
+                    paintAppearance this screenX screenY (tileAppearance tile true)
 
         for monster in session.State.Monsters do
             if isVisible width height monster.Position camera
                && session.State.VisibleTiles[monster.Position.Y, monster.Position.X] then
                 let screenPosition = toScreenPosition camera monster.Position
-                paintCell this screenPosition.X screenPosition.Y monster.Glyph Color.IndianRed Color.Black
+                paintAppearance this screenPosition.X screenPosition.Y (monsterAppearance monster)
 
         if isVisible width height session.State.Player.Position camera then
             let screenPosition = toScreenPosition camera session.State.Player.Position
-            paintCell this screenPosition.X screenPosition.Y session.State.Player.Glyph Color.Cyan Color.Black
+            paintAppearance this screenPosition.X screenPosition.Y playerAppearance
 
         this.IsDirty <- true
 
@@ -369,7 +355,7 @@ type RootScreen(screenWidth, screenHeight) as this =
         new DividerPanel(
             dividerThickness,
             screenHeight,
-            '|',
+            int '|',
             (fun _ ->
                 match activeDrag with
                 | None -> activeDrag <- Some "vertical"
@@ -390,7 +376,7 @@ type RootScreen(screenWidth, screenHeight) as this =
         new DividerPanel(
             cavernPanel.Surface.Width,
             dividerThickness,
-            '-',
+            int '-',
             (fun _ ->
                 match activeDrag with
                 | None -> activeDrag <- Some "horizontal"
@@ -461,7 +447,7 @@ type RootScreen(screenWidth, screenHeight) as this =
 
             if isVisible viewportWidth viewportHeight position camera then
                 let screenPosition = toScreenPosition camera position
-                paintCell cavernPanel screenPosition.X screenPosition.Y '*' Color.Gold Color.Black
+                paintAppearance cavernPanel screenPosition.X screenPosition.Y projectileAppearance
         | _ -> ()
 
         horizontalDivider.Render()

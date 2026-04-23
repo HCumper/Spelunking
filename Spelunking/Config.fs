@@ -40,12 +40,13 @@ type SpeechSettings =
 type WindowSettings =
     { Fullscreen: bool
       BorderlessWindowedFullscreen: bool
+      FontPath: string option
       DefaultFontSize: string }
 
 type MonsterTemplate =
     { Name: string
       MaxHp: int
-      Glyph: string
+      Glyph: int
       Frequency: int
       MinWorld: int
       MaxWorld: int
@@ -107,6 +108,13 @@ let private parseMonsterCsvLine (line: string) : MonsterTemplate =
         | true, parsed -> parsed
         | false, _ -> invalidOp $"Invalid integer value '{value}' for monster field '{fieldName}'."
 
+    let parseGlyph (value: string) =
+        match Int32.TryParse value with
+        | true, parsed when parsed >= 0 -> parsed
+        | true, parsed -> invalidOp $"Invalid negative glyph code '{parsed}' for monster field 'GlyphCode'."
+        | false, _ when not (String.IsNullOrWhiteSpace value) && value.Length = 1 -> int value[0]
+        | false, _ -> invalidOp $"Invalid glyph value '{value}' for monster field 'GlyphCode'. Use a non-negative font glyph index or one character."
+
     let parseOptionalString (value: string) =
         if String.IsNullOrWhiteSpace value then None else Some value
 
@@ -125,7 +133,7 @@ let private parseMonsterCsvLine (line: string) : MonsterTemplate =
 
     { Name = columns[0]
       MaxHp = parseInt "MaxHp" columns[1]
-      Glyph = columns[2]
+      Glyph = parseGlyph columns[2]
       Frequency = parseInt "Frequency" columns[3]
       MinWorld = parseInt "MinWorld" columns[4]
       MaxWorld = parseInt "MaxWorld" columns[5]
@@ -156,11 +164,12 @@ let private loadMonsters () : MonsterTemplate list =
     match lines with
     | [] -> []
     | header :: rows ->
-        let expectedHeader =
-            "Name,MaxHp,Glyph,Frequency,MinWorld,MaxWorld,Speed,Strength,Accuracy,VisionRadius,MeleeWeapon,RangedWeapon,Behavior,OnDeathEffect,Unique,Description,SpeechCue"
+        let expectedHeaders =
+            [ "Name,MaxHp,GlyphCode,Frequency,MinWorld,MaxWorld,Speed,Strength,Accuracy,VisionRadius,MeleeWeapon,RangedWeapon,Behavior,OnDeathEffect,Unique,Description,SpeechCue"
+              "Name,MaxHp,Glyph,Frequency,MinWorld,MaxWorld,Speed,Strength,Accuracy,VisionRadius,MeleeWeapon,RangedWeapon,Behavior,OnDeathEffect,Unique,Description,SpeechCue" ]
 
-        if not (header.Equals(expectedHeader, StringComparison.OrdinalIgnoreCase)) then
-            invalidOp $"Invalid monster CSV header. Expected '{expectedHeader}'."
+        if not (expectedHeaders |> List.exists (fun expected -> header.Equals(expected, StringComparison.OrdinalIgnoreCase))) then
+            invalidOp $"Invalid monster CSV header. Expected '{expectedHeaders.Head}'."
 
         rows |> List.map parseMonsterCsvLine
 
@@ -231,6 +240,19 @@ let uiSettings () : UiSettings =
 
 let windowSettings () : WindowSettings =
     (appSettings ()).Window
+
+let defaultFontPath () : string option =
+    (windowSettings ()).FontPath
+    |> Option.bind (fun path ->
+        if String.IsNullOrWhiteSpace path then
+            None
+        else
+            let trimmed = path.Trim()
+
+            if Path.IsPathRooted trimmed then
+                Some trimmed
+            else
+                Some(Path.Combine(AppContext.BaseDirectory, trimmed)))
 
 let combatSettings () : CombatSettings =
     (appSettings ()).Combat

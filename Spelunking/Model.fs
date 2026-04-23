@@ -25,7 +25,7 @@ type Actor =
       Energy: int
       MeleeWeapon: Weapon
       RangedWeapon: Weapon
-      Glyph: char
+      Glyph: int
       SpeechCue: string option }
 
 type Map =

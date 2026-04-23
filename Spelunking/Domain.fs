@@ -124,11 +124,7 @@ let private createWorldState world player messages =
                       Energy = 0
                       MeleeWeapon = meleeWeapon
                       RangedWeapon = rangedWeapon
-                      Glyph =
-                        match template.Glyph with
-                        | null
-                        | "" -> '?'
-                        | value -> value[0]
+                      Glyph = template.Glyph
                       SpeechCue = template.SpeechCue }))
 
     { World = world
@@ -161,7 +157,7 @@ let initialState () =
           Energy = 0
           MeleeWeapon = startingMeleeWeapon
           RangedWeapon = startingRangedWeapon
-          Glyph = '@'
+          Glyph = int '@'
           SpeechCue = None }
 
     let initial =

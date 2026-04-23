@@ -27,7 +27,7 @@ module Dto =
           Energy: int
           MeleeWeapon: SaveWeapon
           RangedWeapon: SaveWeapon
-          Glyph: string
+          Glyph: JsonElement
           SpeechCue: string option }
 
     [<CLIMutable>]
@@ -82,6 +82,30 @@ let private weaponFromSave (weapon: Dto.SaveWeapon) : Weapon =
       Damage = weapon.Damage
       Ammo = weapon.Ammo }
 
+let private glyphToSave glyph =
+    JsonSerializer.SerializeToElement(glyph, options)
+
+let private glyphFromSave (glyph: JsonElement) =
+    match glyph.ValueKind with
+    | JsonValueKind.Number ->
+        match glyph.TryGetInt32() with
+        | true, parsed when parsed >= 0 -> parsed
+        | true, parsed -> invalidOp $"Invalid negative actor glyph code '{parsed}' in save file."
+        | false, _ -> invalidOp "Invalid actor glyph code in save file."
+    | JsonValueKind.String ->
+        match glyph.GetString() with
+        | null
+        | "" -> int '?'
+        | value ->
+            match Int32.TryParse value with
+            | true, parsed when parsed >= 0 -> parsed
+            | true, parsed -> invalidOp $"Invalid negative actor glyph code '{parsed}' in save file."
+            | false, _ when value.Length = 1 -> int value[0]
+            | false, _ -> invalidOp $"Invalid actor glyph value '{value}' in save file."
+    | JsonValueKind.Undefined
+    | JsonValueKind.Null -> int '?'
+    | _ -> invalidOp "Invalid actor glyph value in save file."
+
 let private actorToSave (actor: Actor) : Dto.SaveActor =
     { Id = actor.Id
       Name = actor.Name
@@ -94,7 +118,7 @@ let private actorToSave (actor: Actor) : Dto.SaveActor =
       Energy = actor.Energy
       MeleeWeapon = weaponToSave actor.MeleeWeapon
       RangedWeapon = weaponToSave actor.RangedWeapon
-      Glyph = string actor.Glyph
+      Glyph = glyphToSave actor.Glyph
       SpeechCue = actor.SpeechCue }
 
 let private actorFromSave (actor: Dto.SaveActor) : Actor =
@@ -108,11 +132,7 @@ let private actorFromSave (actor: Dto.SaveActor) : Actor =
       Energy = actor.Energy
       MeleeWeapon = weaponFromSave actor.MeleeWeapon
       RangedWeapon = weaponFromSave actor.RangedWeapon
-      Glyph =
-        match actor.Glyph with
-        | null
-        | "" -> '?'
-        | value -> value[0]
+      Glyph = glyphFromSave actor.Glyph
       SpeechCue = actor.SpeechCue }
 
 let private encodeRuns (glyphs: char seq) : string =
@@ -217,7 +237,7 @@ let private stateFromSave (state: Dto.SaveGameState) : GameState =
 
 let saveGame (state: GameState) (history: GameState list) : unit =
     let payload : Dto.SaveSession =
-        { Version = 2
+        { Version = 3
           State = stateToSave state
           History = history |> List.map stateToSave }
 

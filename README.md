@@ -68,3 +68,7 @@ Doctor Who-themed dungeon crawler built in F# with SadConsole.
 - App/runtime settings: [`Spelunking/Appsettings.json`](Spelunking/Appsettings.json)
 - Monsters: [`Spelunking/Data/Monsters.csv`](Spelunking/Data/Monsters.csv)
 - Weapons: [`Spelunking/Data/Weapons.csv`](Spelunking/Data/Weapons.csv)
+
+`Monsters.csv` uses `GlyphCode` for each monster's SadConsole font glyph index. ASCII-compatible values such as `68` still render as familiar letters like `D`, while custom font sheets can use non-ASCII glyph cells.
+
+Custom SadConsole `.font` files can be placed under `Spelunking/Fonts/` and selected with `Window:FontPath` in `Appsettings.json`, for example `"Fonts/MyTiles.font"`. Monster `GlyphCode` values then refer to cells in that selected font.

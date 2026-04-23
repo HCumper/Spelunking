@@ -5,6 +5,7 @@ open System.IO
 open FsUnit.Xunit
 open Spelunk.Application
 open Spelunk.Combat
+open Spelunk.Config
 open Spelunk.Model
 open Spelunk.Output
 open Spelunk.Services
@@ -32,13 +33,16 @@ let private actor id name x y hp maxHp speed strength energy glyph : Actor =
       Energy = energy
       MeleeWeapon = weapon "Rusty knife" 1 10 None
       RangedWeapon = weapon "Rusty raygun" 8 20 None
-      Glyph = glyph
+      Glyph = int glyph
       SpeechCue = None }
 
 let private withWeapons (meleeWeapon: Weapon) (rangedWeapon: Weapon) (actor: Actor) : Actor =
     { actor with
         MeleeWeapon = meleeWeapon
         RangedWeapon = rangedWeapon }
+
+let private withGlyphCode glyph (actor: Actor) : Actor =
+    { actor with Glyph = glyph }
 
 let private map width height defaultTile =
     { Width = width
@@ -113,7 +117,7 @@ let ``save and load round-trip game state and history`` () =
         { state 4 4 with
             TurnCount = 7
             Player = actor 0 "scavenger" 2 1 80 100 100 100 0 '@'
-            Monsters = [ actor 1 "Cyberman" 3 3 20 30 50 70 40 'C' ]
+            Monsters = [ actor 1 "Cyberman" 3 3 20 30 50 70 40 'C' |> withGlyphCode 260 ]
             Messages = [ "You shoot the Cyberman."; "The Cyberman hits you." ] }
 
     let original =
@@ -144,6 +148,12 @@ let ``save and load round-trip game state and history`` () =
         assertStateEqual loadedHistory.Head prior
     | None ->
         failwith "Expected save file to load."
+
+[<Fact>]
+let ``monster data loads numeric glyph codes`` () =
+    let dalek = monsterTemplates () |> List.find (fun monster -> monster.Name = "Dalek")
+
+    dalek.Glyph |> should equal 68
 
 [<Fact>]
 let ``recordAction only stores turn-taking commands`` () =

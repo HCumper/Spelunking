@@ -16,6 +16,7 @@
         <Compile Include="Dungeon.fs" />
         <Compile Include="Config.fs" />
         <Compile Include="Model.fs" />
+        <Compile Include="Appearance.fs" />
         <Compile Include="Messages.fs" />
         <Compile Include="Save.fs" />
         <Compile Include="Services.fs" />
@@ -42,6 +43,10 @@
         <Content Include="Data\Weapons.csv">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
             <TargetPath>Data\Weapons.csv</TargetPath>
+        </Content>
+        <Content Include="Fonts\**\*">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <TargetPath>Fonts\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
         </Content>
     </ItemGroup>
 

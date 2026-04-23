@@ -32,6 +32,12 @@ type OverlayViewModel =
     { Cursor: OverlayCursor option
       Panel: OverlayPanel option }
 
+let private glyphLabel glyph =
+    if glyph >= 32 && glyph <= 126 then
+        string (char glyph)
+    else
+        sprintf "glyph %d" glyph
+
 let private monsterAt point state =
     state.Monsters |> List.tryFind (fun monster -> monster.Position = point)
 
@@ -45,7 +51,7 @@ let private describePoint point state =
         "You. The scavenger."
     else
         match monsterAt point state with
-        | Some monster -> sprintf "%s (%c), HP %d/%d." monster.Name monster.Glyph monster.Hp monster.MaxHp
+        | Some monster -> sprintf "%s (%s), HP %d/%d." monster.Name (glyphLabel monster.Glyph) monster.Hp monster.MaxHp
         | None ->
             match state.Map.Tiles[point.Y, point.X] with
             | Wall -> "Rough cavern wall."

@@ -1,0 +1,11 @@
+{
+  "$type": "SadConsole.SadFont, SadConsole",
+  "Name": "WhoTiles",
+  "FilePath": "WhoTiles.png",
+  "GlyphHeight": 16,
+  "GlyphPadding": 0,
+  "GlyphWidth": 8,
+  "SolidGlyphIndex": 219,
+  "Columns": 16,
+  "IsSadExtended": false
+}
