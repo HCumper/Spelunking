@@ -42,6 +42,8 @@ type WindowSettings =
       BorderlessWindowedFullscreen: bool
       FontPath: string option
       TileFontPath: string option
+      TextFontSize: string option
+      TileFontSize: string option
       DefaultFontSize: string }
 
 type MonsterTemplate =
@@ -274,15 +276,28 @@ let spawnSettings () : SpawnSettings =
 let speechSettings () : SpeechSettings =
     (appSettings ()).Speech
 
-let defaultFontSize () : IFont.Sizes =
-    match (windowSettings ()).DefaultFontSize.Trim().ToLowerInvariant() with
+let private fontSizeFromString settingName (value: string) : IFont.Sizes =
+    match value.Trim().ToLowerInvariant() with
     | "quarter" -> IFont.Sizes.Quarter
     | "half" -> IFont.Sizes.Half
     | "one" -> IFont.Sizes.One
     | "two" -> IFont.Sizes.Two
     | "three" -> IFont.Sizes.Three
     | "four" -> IFont.Sizes.Four
-    | value -> invalidOp $"Unsupported Window:DefaultFontSize value '{value}'."
+    | value -> invalidOp $"Unsupported Window:{settingName} value '{value}'."
+
+let private configuredFontSize settingName configured =
+    let window = windowSettings ()
+
+    configured
+    |> Option.defaultValue window.DefaultFontSize
+    |> fontSizeFromString settingName
+
+let defaultFontSize () : IFont.Sizes =
+    configuredFontSize "TextFontSize" (windowSettings ()).TextFontSize
+
+let tileFontSize () : IFont.Sizes =
+    configuredFontSize "TileFontSize" (windowSettings ()).TileFontSize
 
 let monsterTemplates () : MonsterTemplate list =
     loadedMonsters.Value

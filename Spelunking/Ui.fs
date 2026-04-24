@@ -52,7 +52,6 @@ let private clampCameraAxis current focus viewportSize worldSize =
     let maxFocus = current + viewportSize - effectiveMargin - 1
     let maxCamera = max 0 (worldSize - viewportSize)
 
-    // The camera only shifts once the focus point approaches the viewport margin.
     let next =
         if focus < minFocus then
             focus - effectiveMargin
@@ -226,6 +225,12 @@ type DividerPanel(width, height, glyph, onPress: MouseScreenObjectState -> unit,
 type StatsPanel(windowHeight) =
     inherit ScreenSurface(statsWidth, windowHeight)
 
+    new(windowHeight, font: IFont, fontSize: Point) =
+        new StatsPanel(windowHeight)
+        then
+            base.Font <- font
+            base.FontSize <- fontSize
+
     member this.Render(session: Session, camera) =
         clearSurface this
         let width = this.Surface.Width
@@ -285,6 +290,12 @@ type CavernPanel(viewportWidth, viewportHeight) =
 type MessagesPanel(viewportWidth) =
     inherit ScreenSurface(viewportWidth, logRows)
 
+    new(viewportWidth, font: IFont, fontSize: Point) =
+        new MessagesPanel(viewportWidth)
+        then
+            base.Font <- font
+            base.FontSize <- fontSize
+
     member this.Render(session: Session) =
         clearSurface this
         let height = this.Surface.Height
@@ -301,6 +312,12 @@ type MessagesPanel(viewportWidth) =
 
 type OverlayPanelSurface(viewportWidth, viewportHeight) =
     inherit ScreenSurface(viewportWidth, viewportHeight)
+
+    new(viewportWidth, viewportHeight, font: IFont, fontSize: Point) =
+        new OverlayPanelSurface(viewportWidth, viewportHeight)
+        then
+            base.Font <- font
+            base.FontSize <- fontSize
 
     member this.Render(session: Session, camera) =
         clearOverlaySurface this
@@ -340,7 +357,7 @@ type OverlayPanelSurface(viewportWidth, viewportHeight) =
 
         this.IsDirty <- true
 
-type RootScreen(screenWidth, screenHeight, tileFont: IFont option) as this =
+type RootScreen(screenWidth, screenHeight, tileFont: (IFont * IFont.Sizes) option, textFont: IFont, textFontSize: IFont.Sizes) as this =
     inherit ScreenObject()
 
     let dividerThickness = 1
@@ -348,6 +365,7 @@ type RootScreen(screenWidth, screenHeight, tileFont: IFont option) as this =
     let minMessagesHeight = 3
     let minCavernWidth = 20
     let minCavernHeight = 8
+    let panelGapWidth = max 0 panelGap
     let mutable statsPanelWidth = max minStatsWidth statsWidth
     let mutable messagesPanelHeight = max minMessagesHeight logRows
     let mutable session = initialSession ()
@@ -360,7 +378,14 @@ type RootScreen(screenWidth, screenHeight, tileFont: IFont option) as this =
     let mutable spokenMonsterIds: Set<int> = Set.empty
     let mutable projectileAnimation: (Position list * int * TimeSpan) option = None
     let projectileFrameDuration = TimeSpan.FromMilliseconds 35.0
-    let statsPanel = new StatsPanel(screenHeight)
+    let textCellSize = textFont.GetFontSize(textFontSize)
+    let tileCellSize =
+        match tileFont with
+        | Some (font, fontSize) -> font.GetFontSize(fontSize)
+        | None -> textCellSize
+    let toTileCellsX textCells = max 1 ((textCells * textCellSize.X) / max 1 tileCellSize.X)
+    let toTileCellsY textCells = max 1 ((textCells * textCellSize.Y) / max 1 tileCellSize.Y)
+    let statsPanel = new StatsPanel(screenHeight, textFont, textCellSize)
     let verticalDivider =
         new DividerPanel(
             dividerThickness,
@@ -382,11 +407,11 @@ type RootScreen(screenWidth, screenHeight, tileFont: IFont option) as this =
                 | Some "vertical" -> activeDrag <- None
                 | _ -> ()))
     let cavernPanel =
-        let width = max 1 (screenWidth - statsPanelWidth - dividerThickness)
-        let height = max 1 (screenHeight - dividerThickness - messagesPanelHeight)
+        let width = max 1 (toTileCellsX (screenWidth - statsPanelWidth - dividerThickness - panelGapWidth))
+        let height = max 1 (toTileCellsY (screenHeight - dividerThickness - messagesPanelHeight))
 
         match tileFont with
-        | Some font -> new CavernPanel(width, height, font, font.GetFontSize(Game.Instance.DefaultFontSize))
+        | Some (font, fontSize) -> new CavernPanel(width, height, font, font.GetFontSize(fontSize))
         | None -> new CavernPanel(width, height)
     let horizontalDivider =
         new DividerPanel(
@@ -408,19 +433,25 @@ type RootScreen(screenWidth, screenHeight, tileFont: IFont option) as this =
                 match activeDrag with
                 | Some "horizontal" -> activeDrag <- None
                 | _ -> ()))
-    let messagesPanel = new MessagesPanel(cavernPanel.Surface.Width)
-    let overlayPanel = new OverlayPanelSurface(cavernPanel.Surface.Width, cavernPanel.Surface.Height)
+    let messagesPanel = new MessagesPanel(cavernPanel.Surface.Width, textFont, textCellSize)
+    let overlayPanel =
+        match tileFont with
+        | Some (font, fontSize) -> new OverlayPanelSurface(cavernPanel.Surface.Width, cavernPanel.Surface.Height, font, font.GetFontSize(fontSize))
+        | None -> new OverlayPanelSurface(cavernPanel.Surface.Width, cavernPanel.Surface.Height, textFont, textCellSize)
 
     let configureSurface (surface: ScreenSurface) x y =
         surface.Position <- Point(x, y)
         this.Children.Add(surface) |> ignore
 
     let layoutPanels () =
-        statsPanelWidth <- max minStatsWidth (min (screenWidth - dividerThickness - minCavernWidth) statsPanelWidth)
-        let rightWidth = max minCavernWidth (screenWidth - statsPanelWidth - dividerThickness)
+        statsPanelWidth <- max minStatsWidth (min (screenWidth - dividerThickness - panelGapWidth - minCavernWidth) statsPanelWidth)
+        let rightWidth = max minCavernWidth (screenWidth - statsPanelWidth - dividerThickness - panelGapWidth)
         messagesPanelHeight <- max minMessagesHeight (min (screenHeight - dividerThickness - minCavernHeight) messagesPanelHeight)
         let cavernHeight = max minCavernHeight (screenHeight - dividerThickness - messagesPanelHeight)
-        let mapLeft = statsPanelWidth + dividerThickness
+        let mapLeft = statsPanelWidth + dividerThickness + panelGapWidth
+        let rightWidthTiles = max 1 (toTileCellsX rightWidth)
+        let cavernHeightTiles = max 1 (toTileCellsY cavernHeight)
+        let mapLeftTiles = max 0 ((mapLeft * textCellSize.X) / max 1 tileCellSize.X)
         let dividerTop = cavernHeight
 
         // The cavern expands to consume whatever space remains after sidebar and log constraints are applied.
@@ -430,8 +461,8 @@ type RootScreen(screenWidth, screenHeight, tileFont: IFont option) as this =
         verticalDivider.Resize(dividerThickness, screenHeight, false)
         verticalDivider.Position <- Point(statsPanelWidth, 0)
 
-        cavernPanel.Resize(rightWidth, cavernHeight, false)
-        cavernPanel.Position <- Point(mapLeft, 0)
+        cavernPanel.Resize(rightWidthTiles, cavernHeightTiles, false)
+        cavernPanel.Position <- Point(mapLeftTiles, 0)
 
         horizontalDivider.Resize(rightWidth, dividerThickness, false)
         horizontalDivider.Position <- Point(mapLeft, dividerTop)
@@ -439,8 +470,8 @@ type RootScreen(screenWidth, screenHeight, tileFont: IFont option) as this =
         messagesPanel.Resize(rightWidth, messagesPanelHeight, false)
         messagesPanel.Position <- Point(mapLeft, dividerTop + dividerThickness)
 
-        overlayPanel.Resize(rightWidth, cavernHeight, false)
-        overlayPanel.Position <- Point(mapLeft, 0)
+        overlayPanel.Resize(rightWidthTiles, cavernHeightTiles, false)
+        overlayPanel.Position <- Point(mapLeftTiles, 0)
 
     let redraw () =
         let viewportWidth = cavernPanel.Surface.Width

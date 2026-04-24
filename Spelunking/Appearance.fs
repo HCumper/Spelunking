@@ -51,7 +51,7 @@ let playerAppearance : CellAppearance =
 let monsterAppearance (monster: Actor) : CellAppearance =
     let foreground =
         match monster.Glyph with
-        | glyph when glyph = int 'D' -> Color.Red
+        | glyph when glyph = int 'D' -> Color.LightSteelBlue
         | glyph when glyph = int 'C' -> Color.LightGray
         | glyph when glyph = int 'W' -> Color.White
         | glyph when glyph = int 'M' -> Color.DarkRed

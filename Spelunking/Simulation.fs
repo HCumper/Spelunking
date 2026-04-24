@@ -303,6 +303,13 @@ let private updateMonster state monster =
     let stepX, stepY =
         compare dx 0, compare dy 0
 
+    let movementOptions =
+        match stepX, stepY with
+        | 0, 0 -> []
+        | 0, _ -> [ stepX, stepY ]
+        | _, 0 -> [ stepX, stepY ]
+        | _ -> [ stepX, stepY; stepX, 0; 0, stepY ]
+
     let destination =
         { X = monster.Position.X + stepX
           Y = monster.Position.Y + stepY }
@@ -315,12 +322,18 @@ let private updateMonster state monster =
         nextState, note, projectilePaths
     else
         let otherMonsters = state.Monsters |> List.filter (fun current -> current.Id <> monster.Id)
+        let movedMonster =
+            movementOptions
+            |> List.tryPick (fun (candidateX, candidateY) ->
+                match tryMoveActor state.Map otherMonsters monster candidateX candidateY with
+                | Ok moved -> Some moved
+                | Error _ -> None)
 
-        match tryMoveActor state.Map otherMonsters monster stepX stepY with
-        | Ok moved ->
+        match movedMonster with
+        | Some moved ->
             let monsters = moved :: otherMonsters |> List.sortBy (fun actor -> actor.Id)
             { state with Monsters = monsters }, None, []
-        | Error _ ->
+        | None ->
             state, None, []
 
 let private runMonsterActions state monster =
