@@ -172,18 +172,35 @@ let private withUpdatedRangedWeapon shooterId weapon state =
         |> Option.map (fun monster -> updateMonsterInState { monster with RangedWeapon = weapon } state)
         |> Option.defaultValue state
 
+let private tryRegeneratePlayer player =
+    if player.Hp > 0 || player.RegenerationsRemaining <= 0 then
+        None
+    else
+        let nextIncarnation = player.Incarnation + 1
+
+        Some
+            { player with
+                Hp = player.MaxHp
+                Glyph = playerGlyphForIncarnation nextIncarnation
+                Incarnation = nextIncarnation
+                RegenerationsRemaining = player.RegenerationsRemaining - 1 }
+
 let private applyRangedHit shooterId shooterName weapon targetPoint targetActor state =
     let wounded = attackWithWeapon weapon targetActor
     let stateWithAmmo = withUpdatedRangedWeapon shooterId (addAmmo weapon -1) state
 
     if targetActor.Id = state.Player.Id then
-        let message =
-            if wounded.Hp <= 0 then
-                sprintf "%s kills you." shooterName
-            else
-                sprintf "%s shoots you." shooterName
+        match tryRegeneratePlayer wounded with
+        | Some regenerated ->
+            { stateWithAmmo with Player = regenerated }, sprintf "%s shoots you and triggers your regeneration." shooterName
+        | None ->
+            let message =
+                if wounded.Hp <= 0 then
+                    sprintf "%s kills you." shooterName
+                else
+                    sprintf "%s shoots you." shooterName
 
-        { stateWithAmmo with Player = wounded }, message
+            { stateWithAmmo with Player = wounded }, message
     else
         let woundedState =
             if wounded.Hp <= 0 then
@@ -315,8 +332,13 @@ let private updateMonster state monster =
           Y = monster.Position.Y + stepY }
 
     if destination = playerPos then
-        let player = attackWithWeapon monster.MeleeWeapon state.Player
-        { state with Player = player }, Some(sprintf "The %s hits you." monster.Name), []
+        let wounded = attackWithWeapon monster.MeleeWeapon state.Player
+
+        match tryRegeneratePlayer wounded with
+        | Some regenerated ->
+            { state with Player = regenerated }, Some(sprintf "The %s hits you and triggers your regeneration." monster.Name), []
+        | None ->
+            { state with Player = wounded }, Some(sprintf "The %s hits you." monster.Name), []
     elif canUseRangedWeapon monster.RangedWeapon monster.Position playerPos then
         let nextState, note, projectilePaths = tryMonsterFireAt monster playerPos state
         nextState, note, projectilePaths

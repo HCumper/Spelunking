@@ -14,6 +14,24 @@ type Weapon =
       Damage: int
       Ammo: int option }
 
+let playerGlyphForIncarnation incarnation =
+    let glyphs =
+        [ 64
+          int '&'
+          int '9'
+          int '8'
+          int '6'
+          int 'Q'
+          int 'P'
+          int 'B'
+          int 'R'
+          int 'M'
+          int 'W'
+          int 'K'
+          int 'A' ]
+
+    glyphs[max 0 (min (glyphs.Length - 1) incarnation)]
+
 type Actor =
     { Id: int
       Name: string
@@ -26,7 +44,9 @@ type Actor =
       MeleeWeapon: Weapon
       RangedWeapon: Weapon
       Glyph: int
-      SpeechCue: string option }
+      SpeechCue: string option
+      Incarnation: int
+      RegenerationsRemaining: int }
 
 type Map =
     { Width: int

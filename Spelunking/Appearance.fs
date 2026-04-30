@@ -43,8 +43,8 @@ let tileAppearance tile explored : CellAppearance =
           Foreground = Color.SteelBlue
           Background = Color.Black }
 
-let playerAppearance : CellAppearance =
-    { Glyph = Glyphs.Player
+let playerAppearance (player: Actor) : CellAppearance =
+    { Glyph = player.Glyph
       Foreground = Color.White
       Background = Color.Black }
 

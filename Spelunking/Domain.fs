@@ -125,7 +125,9 @@ let private createWorldState world player messages =
                       MeleeWeapon = meleeWeapon
                       RangedWeapon = rangedWeapon
                       Glyph = template.Glyph
-                      SpeechCue = template.SpeechCue }))
+                      SpeechCue = template.SpeechCue
+                      Incarnation = 0
+                      RegenerationsRemaining = 0 }))
 
     { World = world
       TurnCount = 0
@@ -157,8 +159,10 @@ let initialState () =
           Energy = 0
           MeleeWeapon = startingMeleeWeapon
           RangedWeapon = startingRangedWeapon
-          Glyph = int '@'
-          SpeechCue = None }
+          Glyph = playerGlyphForIncarnation 0
+          SpeechCue = None
+          Incarnation = 0
+          RegenerationsRemaining = 12 }
 
     let initial =
         createWorldState

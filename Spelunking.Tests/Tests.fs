@@ -34,7 +34,9 @@ let private actor id name x y hp maxHp speed strength energy glyph : Actor =
       MeleeWeapon = weapon "Rusty knife" 1 10 None
       RangedWeapon = weapon "Rusty raygun" 8 20 None
       Glyph = int glyph
-      SpeechCue = None }
+      SpeechCue = None
+      Incarnation = 0
+      RegenerationsRemaining = 0 }
 
 let private withWeapons (meleeWeapon: Weapon) (rangedWeapon: Weapon) (actor: Actor) : Actor =
     { actor with
@@ -116,7 +118,11 @@ let ``save and load round-trip game state and history`` () =
     let original =
         { state 4 4 with
             TurnCount = 7
-            Player = actor 0 "scavenger" 2 1 80 100 100 100 0 '@'
+            Player =
+                { actor 0 "scavenger" 2 1 80 100 100 100 0 '@' with
+                    Glyph = playerGlyphForIncarnation 2
+                    Incarnation = 2
+                    RegenerationsRemaining = 10 }
             Monsters = [ actor 1 "Cyberman" 3 3 20 30 50 70 40 'C' |> withGlyphCode 260 ]
             Messages = [ "You shoot the Cyberman."; "The Cyberman hits you." ] }
 
@@ -154,6 +160,54 @@ let ``monster data loads numeric glyph codes`` () =
     let dalek = monsterTemplates () |> List.find (fun monster -> monster.Name = "Dalek")
 
     dalek.Glyph |> should equal 68
+
+[<Fact>]
+let ``monster melee damage triggers player regeneration and changes glyph`` () =
+    let player =
+        { actor 0 "doctor" 1 1 10 100 100 100 0 '@' with
+            Incarnation = 0
+            RegenerationsRemaining = 2
+            Glyph = playerGlyphForIncarnation 0 }
+
+    let monster =
+        actor 1 "Dalek" 2 2 100 100 100 100 0 'D'
+        |> withWeapons (weapon "Exterminator claw" 1 200 None) (weapon "Exterminator" 8 20 None)
+
+    let result =
+        { state 4 4 with
+            Player = player
+            Monsters = [ monster ] }
+        |> runMonsterTurnDetailed
+
+    result.State.Player.Hp |> should equal 100
+    result.State.Player.Incarnation |> should equal 1
+    result.State.Player.RegenerationsRemaining |> should equal 1
+    result.State.Player.Glyph |> should equal (playerGlyphForIncarnation 1)
+    result.Notes |> should contain "The Dalek hits you and triggers your regeneration."
+
+[<Fact>]
+let ``monster ranged damage triggers player regeneration and changes glyph`` () =
+    let player =
+        { actor 0 "doctor" 1 1 10 100 100 100 0 '@' with
+            Incarnation = 0
+            RegenerationsRemaining = 1
+            Glyph = playerGlyphForIncarnation 0 }
+
+    let sniper =
+        actor 1 "Dalek" 3 1 100 100 100 100 0 'D'
+        |> withWeapons (weapon "Plunger" 1 1 None) (weapon "Exterminator" 8 200 None)
+
+    let result =
+        { state 5 5 with
+            Player = player
+            Monsters = [ sniper ] }
+        |> runMonsterTurnDetailed
+
+    result.State.Player.Hp |> should equal 100
+    result.State.Player.Incarnation |> should equal 1
+    result.State.Player.RegenerationsRemaining |> should equal 0
+    result.State.Player.Glyph |> should equal (playerGlyphForIncarnation 1)
+    result.Notes |> should contain "The Dalek shoots you and triggers your regeneration."
 
 [<Fact>]
 let ``recordAction only stores turn-taking commands`` () =

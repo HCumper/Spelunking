@@ -28,7 +28,9 @@ module Dto =
           MeleeWeapon: SaveWeapon
           RangedWeapon: SaveWeapon
           Glyph: JsonElement
-          SpeechCue: string option }
+          SpeechCue: string option
+          Incarnation: int
+          RegenerationsRemaining: int }
 
     [<CLIMutable>]
     type SaveGameState =
@@ -119,7 +121,9 @@ let private actorToSave (actor: Actor) : Dto.SaveActor =
       MeleeWeapon = weaponToSave actor.MeleeWeapon
       RangedWeapon = weaponToSave actor.RangedWeapon
       Glyph = glyphToSave actor.Glyph
-      SpeechCue = actor.SpeechCue }
+      SpeechCue = actor.SpeechCue
+      Incarnation = actor.Incarnation
+      RegenerationsRemaining = actor.RegenerationsRemaining }
 
 let private actorFromSave (actor: Dto.SaveActor) : Actor =
     { Id = actor.Id
@@ -133,7 +137,9 @@ let private actorFromSave (actor: Dto.SaveActor) : Actor =
       MeleeWeapon = weaponFromSave actor.MeleeWeapon
       RangedWeapon = weaponFromSave actor.RangedWeapon
       Glyph = glyphFromSave actor.Glyph
-      SpeechCue = actor.SpeechCue }
+      SpeechCue = actor.SpeechCue
+      Incarnation = actor.Incarnation
+      RegenerationsRemaining = actor.RegenerationsRemaining }
 
 let private encodeRuns (glyphs: char seq) : string =
     let folder (parts: string list, current: char option, count: int) glyph =

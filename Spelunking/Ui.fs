@@ -77,6 +77,14 @@ let private isVisible viewportWidth viewportHeight worldPosition camera =
     && worldPosition.Y >= camera.Y
     && worldPosition.Y < camera.Y + viewportHeight
 
+let private regenerationFrames oldGlyph newGlyph =
+    [ { Glyph = oldGlyph; Foreground = Color.White; Background = Color.Black }
+      { Glyph = oldGlyph; Foreground = Color.Gold; Background = Color.Black }
+      { Glyph = newGlyph; Foreground = Color.White; Background = Color.DarkGoldenrod }
+      { Glyph = oldGlyph; Foreground = Color.LightYellow; Background = Color.DarkSlateBlue }
+      { Glyph = newGlyph; Foreground = Color.LightCyan; Background = Color.DarkBlue }
+      { Glyph = newGlyph; Foreground = Color.White; Background = Color.Black } ]
+
 let private paintCell (surface: ScreenSurface) (x: int) (y: int) (glyph: int) foreground background =
     surface.SetGlyph(x, y, glyph)
     surface.SetForeground(x, y, foreground)
@@ -283,7 +291,7 @@ type CavernPanel(viewportWidth, viewportHeight) =
 
         if isVisible width height session.State.Player.Position camera then
             let screenPosition = toScreenPosition camera session.State.Player.Position
-            paintAppearance this screenPosition.X screenPosition.Y playerAppearance
+            paintAppearance this screenPosition.X screenPosition.Y (playerAppearance session.State.Player)
 
         this.IsDirty <- true
 
@@ -377,7 +385,9 @@ type RootScreen(screenWidth, screenHeight, tileFont: (IFont * IFont.Sizes) optio
     let mutable activeDrag: string option = None
     let mutable spokenMonsterIds: Set<int> = Set.empty
     let mutable projectileAnimation: (Position list * int * TimeSpan) option = None
+    let mutable regenerationAnimation: (Position * CellAppearance list * int * TimeSpan) option = None
     let projectileFrameDuration = TimeSpan.FromMilliseconds 35.0
+    let regenerationFrameDuration = TimeSpan.FromMilliseconds 70.0
     let textCellSize = textFont.GetFontSize(textFontSize)
     let tileCellSize =
         match tileFont with
@@ -497,6 +507,13 @@ type RootScreen(screenWidth, screenHeight, tileFont: (IFont * IFont.Sizes) optio
                 paintAppearance cavernPanel screenPosition.X screenPosition.Y projectileAppearance
         | _ -> ()
 
+        match regenerationAnimation with
+        | Some (position, frames, index, _) when index >= 0 && index < frames.Length ->
+            if isVisible viewportWidth viewportHeight position camera then
+                let screenPosition = toScreenPosition camera position
+                paintAppearance cavernPanel screenPosition.X screenPosition.Y frames[index]
+        | _ -> ()
+
         horizontalDivider.Render()
         messagesPanel.Render(session)
         overlayPanel.Render(session, camera)
@@ -506,6 +523,7 @@ type RootScreen(screenWidth, screenHeight, tileFont: (IFont * IFont.Sizes) optio
         requestRedraw <- redraw
 
     let applyIntentAndRedraw intent =
+        let priorPlayer = session.State.Player
         let transition = applyIntent services intent session
 
         match transition.NextSession with
@@ -513,6 +531,15 @@ type RootScreen(screenWidth, screenHeight, tileFont: (IFont * IFont.Sizes) optio
             if nextSession.State.World <> session.State.World then
                 spokenMonsterIds <- Set.empty
             session <- nextSession
+
+            if session.State.Player.Incarnation > priorPlayer.Incarnation then
+                regenerationAnimation <-
+                    Some(
+                        session.State.Player.Position,
+                        regenerationFrames priorPlayer.Glyph session.State.Player.Glyph,
+                        0,
+                        TimeSpan.Zero
+                    )
         | None ->
             Game.Instance.MonoGameInstance.Exit()
 
@@ -573,9 +600,10 @@ type RootScreen(screenWidth, screenHeight, tileFont: (IFont * IFont.Sizes) optio
         redraw ()
 
     override _.ProcessKeyboard(keyboard: Keyboard) =
-        match projectileAnimation with
-        | Some _ -> true
-        | None ->
+        match projectileAnimation, regenerationAnimation with
+        | Some _, _
+        | _, Some _ -> true
+        | None, None ->
             match tryGetIntent session keyboard with
             | Some intent ->
                 intent |> normalizeIntent session |> applyIntentAndRedraw
@@ -583,6 +611,8 @@ type RootScreen(screenWidth, screenHeight, tileFont: (IFont * IFont.Sizes) optio
             | None -> base.ProcessKeyboard(keyboard)
 
     override _.Update(delta: TimeSpan) =
+        let mutable needsRedraw = false
+
         match projectileAnimation with
         | Some (path, index, elapsed) ->
             let totalElapsed = elapsed + delta
@@ -598,9 +628,32 @@ type RootScreen(screenWidth, screenHeight, tileFont: (IFont * IFont.Sizes) optio
                     else
                         Some(path, nextIndex, TimeSpan.FromTicks remainingTicks)
 
-                redraw ()
+                needsRedraw <- true
             else
                 projectileAnimation <- Some(path, index, totalElapsed)
         | None -> ()
+
+        match regenerationAnimation with
+        | Some (position, frames, index, elapsed) ->
+            let totalElapsed = elapsed + delta
+            let advancedFrames = int (totalElapsed.Ticks / regenerationFrameDuration.Ticks)
+            let remainingTicks = totalElapsed.Ticks % regenerationFrameDuration.Ticks
+
+            if advancedFrames > 0 then
+                let nextIndex = index + advancedFrames
+
+                regenerationAnimation <-
+                    if nextIndex >= frames.Length then
+                        None
+                    else
+                        Some(position, frames, nextIndex, TimeSpan.FromTicks remainingTicks)
+
+                needsRedraw <- true
+            else
+                regenerationAnimation <- Some(position, frames, index, totalElapsed)
+        | None -> ()
+
+        if needsRedraw then
+            redraw ()
 
         base.Update(delta)
