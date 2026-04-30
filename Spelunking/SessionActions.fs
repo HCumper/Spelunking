@@ -326,7 +326,7 @@ let applyIntent services intent session : Transition =
             | TimeShiftPrompt turnsText, Confirm ->
                 match Int32.TryParse turnsText with
                 | true, turns when turns >= 1 ->
-                    SessionHistory.rewindSession turns session, []
+                    SessionHistory.rewindSession turns session, [] 
                 | _ ->
                     { session with
                         State = addMessage "Enter a turn count from 1 to 10." session.State
