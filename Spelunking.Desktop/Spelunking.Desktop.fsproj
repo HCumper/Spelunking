@@ -13,26 +13,17 @@
     </ItemGroup>
 
     <ItemGroup>
-        <Compile Include="Dungeon.fs" />
-        <Compile Include="Config.fs" />
-        <Compile Include="Model.fs" />
         <Compile Include="Appearance.fs" />
-        <Compile Include="Messages.fs" />
-        <Compile Include="Save.fs" />
         <Compile Include="Services.fs" />
-        <Compile Include="Visibility.fs" />
-        <Compile Include="World.fs" />
-        <Compile Include="Combat.fs" />
-        <Compile Include="Simulation.fs" />
-        <Compile Include="Domain.fs" />
-        <Compile Include="Output.fs" />
-        <Compile Include="Application.fs" />
-        <Compile Include="SessionHistory.fs" />
-        <Compile Include="SessionActions.fs" />
-        <Compile Include="Input.fs" />
-        <Compile Include="Overlay.fs" />
         <Compile Include="Ui.fs" />
         <Compile Include="Program.fs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Spelunking.Core\Spelunking.Core.fsproj" />
+    </ItemGroup>
+
+    <ItemGroup>
         <Content Include="Appsettings.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>

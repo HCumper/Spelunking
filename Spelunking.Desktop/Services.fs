@@ -1,15 +1,11 @@
-(* Defines external effect boundaries so application logic does not call I/O implementations directly. *)
-module Spelunk.Services
+(* Provides desktop implementations of the core effect boundaries. *)
+module Spelunk.DesktopServices
 
 open System
 open System.Speech.Synthesis
 open Spelunk.Config
 open Spelunk.Model
-
-type Services =
-    { SaveGame: GameState * GameState list -> unit
-      TryLoadGame: unit -> (GameState * GameState list) option
-      Speak: string -> unit }
+open Spelunk.Services
 
 let private createSpeechService () =
     let settings = speechSettings ()

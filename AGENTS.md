@@ -8,10 +8,15 @@ This file is for coding agents working in this repo. Prefer small, coherent chan
 
 ## Solution Layout
 
-- `Spelunking/`
-  - Main game project.
+- `Spelunking.Core/`
+  - Shared game rules, model, data loading, save serialization, input intents, and overlay view models.
+- `Spelunking.Desktop/`
+  - SadConsole/MonoGame desktop host, desktop rendering, speech implementation, fonts, and runtime data files.
+  - Suspended until the next gameplay update, but keep it up to date with core changes and test coverage.
+- `Spelunking.Web/`
+  - Static Bolero WebAssembly client shell that references `Spelunking.Core`.
 - `Spelunking.Tests/`
-  - xUnit + FsUnit test project.
+  - xUnit + FsUnit test project targeting `Spelunking.Core`.
 - `README.md`
   - User-facing project overview and gameplay notes.
 
@@ -35,22 +40,24 @@ This file is for coding agents working in this repo. Prefer small, coherent chan
   - Intent handling, modal flow, run behavior, save/load dispatch.
 - `SessionHistory.fs`
   - Time shifter history and rewind logic.
-- `Ui.fs`
+- `Spelunking.Desktop/Ui.fs`
   - SadConsole panels, input polling, camera, rendering, and speech triggering.
-- `Services.fs`
-  - External effects such as save/load and speech.
+- `Spelunking.Core/Services.fs`
+  - Effect boundary record used by session actions.
+- `Spelunking.Desktop/Services.fs`
+  - Desktop implementations for save/load and speech.
 - `Save.fs`
   - Save-game serialization.
 - `Config.fs`
-  - Loads app settings and CSV game data.
+  - Loads app settings and CSV game data without depending on SadConsole.
 
 ## Data Files
 
-- `Spelunking/Appsettings.json`
+- `Spelunking.Desktop/Appsettings.json`
   - Runtime and tuning settings.
-- `Spelunking/Data/Monsters.csv`
+- `Spelunking.Desktop/Data/Monsters.csv`
   - Monster definitions.
-- `Spelunking/Data/Weapons.csv`
+- `Spelunking.Desktop/Data/Weapons.csv`
   - Weapon definitions.
 
 Keep gameplay content in `Data/`. Keep app/runtime settings in `Appsettings.json`.
@@ -73,7 +80,8 @@ From the repo root:
 ```powershell
 dotnet build Spelunking.sln /p:UseAppHost=false
 dotnet test Spelunking.Tests\Spelunking.Tests.fsproj /p:UseAppHost=false
-dotnet run --project Spelunking\Spelunking.fsproj /p:UseAppHost=false
+dotnet run --project Spelunking.Desktop\Spelunking.Desktop.fsproj /p:UseAppHost=false
+dotnet build Spelunking.Web\Spelunking.Web.fsproj
 ```
 
 ## Change Guidance
@@ -110,4 +118,3 @@ If you touch only docs, note that tests were not rerun.
 - Entering the TARDIS generates the next world.
 - The time shifter rewinds from in-memory history, not from disk saves.
 - Running is `.` plus a numpad direction and stops on branches, blockers, world transition, or newly visible monsters.
-

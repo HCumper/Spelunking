@@ -1,6 +1,17 @@
 # Spelunk
 
-Doctor Who-themed dungeon crawler built in F# with SadConsole.
+Doctor Who-themed dungeon crawler built in F# with SadConsole, with the game logic split into a shared core for desktop and web hosts.
+
+## Solution Structure
+
+- `Spelunking.Core`
+  - Shared game model, rules, simulation, visibility, save serialization, input intents, and data loading.
+- `Spelunking.Desktop`
+  - Current SadConsole/MonoGame desktop app.
+- `Spelunking.Web`
+  - Static Bolero WebAssembly client shell that references the shared core.
+- `Spelunking.Tests`
+  - xUnit/FsUnit regression tests against the shared core.
 
 ## Current Game
 
@@ -65,13 +76,13 @@ Doctor Who-themed dungeon crawler built in F# with SadConsole.
 
 ## Data Files
 
-- App/runtime settings: [`Spelunking/Appsettings.json`](Spelunking/Appsettings.json)
-- Monsters: [`Spelunking/Data/Monsters.csv`](Spelunking/Data/Monsters.csv)
-- Weapons: [`Spelunking/Data/Weapons.csv`](Spelunking/Data/Weapons.csv)
+- App/runtime settings: [`Spelunking.Desktop/Appsettings.json`](Spelunking.Desktop/Appsettings.json)
+- Monsters: [`Spelunking.Desktop/Data/Monsters.csv`](Spelunking.Desktop/Data/Monsters.csv)
+- Weapons: [`Spelunking.Desktop/Data/Weapons.csv`](Spelunking.Desktop/Data/Weapons.csv)
 - Architecture diagram: [`ARCHITECTURE.md`](ARCHITECTURE.md)
 
 `Monsters.csv` uses `GlyphCode` for each monster's SadConsole font glyph index. ASCII-compatible values such as `68` still render as familiar letters like `D`, while custom font sheets can use non-ASCII glyph cells.
 
-Custom SadConsole `.font` files can be placed under `Spelunking/Fonts/` and selected with `Window:TileFontPath` in `Appsettings.json`, for example `"Fonts/MyTiles.font"`. Monster `GlyphCode` values then refer to cells in that selected tile font, while UI text continues to use SadConsole's built-in text font.
+Custom SadConsole `.font` files can be placed under `Spelunking.Desktop/Fonts/` and selected with `Window:TileFontPath` in `Appsettings.json`, for example `"Fonts/MyTiles.font"`. Monster `GlyphCode` values then refer to cells in that selected tile font, while UI text continues to use SadConsole's built-in text font.
 
 `Window:TextFontSize` controls UI text size and `Window:TileFontSize` controls the map tile size. Keeping text at `Two` and tiles at `One` shows more of the dungeon while preserving readable sidebar text.

@@ -1,0 +1,234 @@
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #080908;
+  color: #e8e6da;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.spelunk-shell {
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 176px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+  box-sizing: border-box;
+  outline: none;
+  overflow: hidden;
+}
+
+.stats-panel {
+  border: 1px solid #5c594f;
+  background: #11120f;
+  padding: 12px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.stats-panel h1 {
+  margin: 0 0 14px;
+  color: #f2d46b;
+  font-size: 24px;
+  font-family: Consolas, "Courier New", monospace;
+  letter-spacing: 0;
+}
+
+.stats-panel dl {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 7px 8px;
+  margin: 0;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 14px;
+}
+
+.stats-panel dt {
+  color: #aaa693;
+}
+
+.stats-panel dd {
+  margin: 0;
+  color: #f1efe2;
+  overflow-wrap: anywhere;
+}
+
+.command-list {
+  display: grid;
+  gap: 5px;
+  margin-top: 18px;
+  color: #b6b2a0;
+  font-size: 13px;
+}
+
+.play-area {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 92px;
+  gap: 10px;
+}
+
+.map-wrap {
+  position: relative;
+  overflow: hidden;
+  max-width: 100%;
+  min-height: 0;
+  background: #000;
+  border: 1px solid #34362d;
+}
+
+.spelunk-shell:focus-within .map-wrap {
+  border-color: #f2d46b;
+}
+
+.game-map {
+  display: grid;
+  grid-template-rows: repeat(30, 14px);
+  margin: 0;
+  padding: 10px;
+  background: #000;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 14px;
+  line-height: 14px;
+  width: max-content;
+}
+
+.map-row {
+  display: grid;
+  grid-template-columns: repeat(72, 14px);
+  height: 14px;
+}
+
+.tile {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  color: #c6c1ab;
+  background: #000;
+}
+
+.floor {
+  color: #354641;
+}
+
+.wall {
+  color: #8d8f86;
+}
+
+.tardis {
+  color: #2fb8ff;
+}
+
+.explored {
+  color: #4c514d;
+}
+
+.player {
+  color: #fffdf0;
+  font-weight: 700;
+}
+
+.monster {
+  color: #d45b52;
+  font-weight: 700;
+}
+
+.monster.dalek {
+  color: #85a9d7;
+}
+
+.monster.cyberman {
+  color: #d2d6d7;
+}
+
+.monster.angel {
+  color: #f0f0f0;
+}
+
+.cursor {
+  color: #111;
+  background: #f2d46b;
+  font-weight: 700;
+}
+
+.hidden {
+  color: transparent;
+}
+
+.overlay-panel {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  border: 1px solid #f2d46b;
+  background: rgba(13, 14, 12, 0.94);
+  color: #ebe6d0;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  font-family: Consolas, "Courier New", monospace;
+}
+
+.overlay-panel.footer {
+  bottom: 16px;
+}
+
+.overlay-panel.dialog {
+  top: 18px;
+  left: 50%;
+  right: auto;
+  width: min(520px, calc(100% - 32px));
+  transform: translateX(-50%);
+}
+
+.overlay-panel h2 {
+  margin: 0 0 8px;
+  color: #f2d46b;
+  font-size: 16px;
+  letter-spacing: 0;
+}
+
+.overlay-panel p {
+  margin: 4px 0;
+}
+
+.message-log {
+  height: 92px;
+  border: 1px solid #34362d;
+  background: #0d0e0c;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: #c4c0ad;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.message-log p {
+  margin: 2px 0;
+}
+
+.message-log .danger {
+  color: #ff6d5d;
+}
+
+@media (max-width: 760px) {
+  .spelunk-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-panel {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px 16px;
+  }
+
+  .stats-panel h1,
+  .stats-panel dl,
+  .command-list {
+    margin: 0;
+  }
+}

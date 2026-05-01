@@ -241,13 +241,24 @@ let private stateFromSave (state: Dto.SaveGameState) : GameState =
       ExploredTiles = rleToGrid state.MapHeight state.MapWidth state.ExploredTilesRle
       Messages = state.Messages }
 
-let saveGame (state: GameState) (history: GameState list) : unit =
+let serializeSession (state: GameState) (history: GameState list) : string =
     let payload : Dto.SaveSession =
         { Version = 3
           State = stateToSave state
           History = history |> List.map stateToSave }
 
-    let json = JsonSerializer.Serialize(payload, options)
+    JsonSerializer.Serialize(payload, options)
+
+let deserializeSession (json: string) : (GameState * GameState list) option =
+    let loaded: Dto.SaveSession = JsonSerializer.Deserialize<Dto.SaveSession>(json, options)
+
+    if obj.ReferenceEquals(loaded, null) then
+        None
+    else
+        Some(stateFromSave loaded.State, loaded.History |> List.map stateFromSave)
+
+let saveGame (state: GameState) (history: GameState list) : unit =
+    let json = serializeSession state history
     File.WriteAllText(savePath (), json)
 
 let tryLoadGame () : (GameState * GameState list) option =
@@ -257,9 +268,4 @@ let tryLoadGame () : (GameState * GameState list) option =
         None
     else
         let json = File.ReadAllText path
-        let loaded: Dto.SaveSession = JsonSerializer.Deserialize<Dto.SaveSession>(json, options)
-
-        if obj.ReferenceEquals(loaded, null) then
-            None
-        else
-            Some(stateFromSave loaded.State, loaded.History |> List.map stateFromSave)
+        deserializeSession json

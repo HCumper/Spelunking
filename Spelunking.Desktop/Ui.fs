@@ -14,7 +14,7 @@ open Spelunk.Overlay
 open Spelunk.Output
 open Spelunk.Domain
 open Spelunk.SessionActions
-open Spelunk.Services
+open Spelunk.DesktopServices
 
 let private ui = uiSettings ()
 let private statsWidth = ui.StatsWidth

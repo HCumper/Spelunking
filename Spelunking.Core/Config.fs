@@ -4,7 +4,6 @@ module Spelunk.Config
 open System
 open System.IO
 open System.Text.Json
-open SadConsole
 open Spelunk.Dungeon
 
 type DungeonSettings =
@@ -79,6 +78,70 @@ type AppSettings =
       Speech: SpeechSettings
       Window: WindowSettings }
 
+let private defaultSettings =
+    { Dungeon =
+        { MapWidth = 400
+          MapHeight = 200
+          RoomAttempts = 150
+          MinRoomWidth = 4
+          MaxRoomWidth = 24
+          MinRoomHeight = 3
+          MaxRoomHeight = 20
+          MaxOverlappingRooms = 10 }
+      Ui =
+        { StatsWidth = 16
+          GapRows = 1
+          LogRows = 4
+          CameraMargin = 10
+          PanelGap = 2
+          SightRadius = 12 }
+      Combat = { TargetRange = 8 }
+      Spawn = { MonsterRoomDensity = 2.0; MaxMonsters = 1200 }
+      Speech = { Enabled = true; Rate = 0; Volume = 100 }
+      Window =
+        { Fullscreen = true
+          BorderlessWindowedFullscreen = true
+          FontPath = None
+          TileFontPath = Some "Fonts/WhoTiles.font"
+          TextFontSize = Some "Two"
+          TileFontSize = Some "Three"
+          DefaultFontSize = "Two" } }
+
+let private defaultMonsterRows =
+    [ "Name,MaxHp,GlyphCode,Frequency,MinWorld,MaxWorld,Speed,Strength,Accuracy,VisionRadius,MeleeWeapon,RangedWeapon,Behavior,OnDeathEffect,Unique,Description,SpeechCue"
+      "Cyberman,30,67,70,1,3,50,70,90,80,Rusty Knife,Rusty Raygun,Chaser,,FALSE,Cybernetic infantry that marches forward without hesitation.,Delete. Delete."
+      "Raston Warrior Robot,40,82,20,1,6,500,40,120,100,Light Saber,,Chaser,,FALSE,An impossibly fast killing machine.,None survive."
+      "Dalek,50,68,100,1,10,50,70,110,100,Rusty Knife,Exterminator,Sniper,,FALSE,A hateful war machine sealed inside its armored casing.,Exterminate. exterminate"
+      "Ice Warrior,50,73,50,1,7,50,70,90,80,Lirpa,Revolver,Bruiser,,FALSE,A reptilian armored soldier from Mars.,Hiss."
+      "Yeti,50,89,40,1,4,50,70,70,60,Batleath,,Bruiser,,FALSE,A bulky robotic servant that lumbers straight at intruders.,Roar."
+      "Silurian,50,83,50,1,5,80,50,80,80,Rusty Knife,Revolver,Chaser,,FALSE,A calculating reptile humanoid from Earth's distant past.,Observe."
+      "Sontaran,80,79,30,1,5,30,100,100,70,Lirpa,Rusty Raygun,Bruiser,,FALSE,A clone-bred soldier built entirely for war.,Sontar-Ha."
+      "Auton,40,65,50,1,4,60,60,80,70,Rusty Knife,,Chaser,,FALSE,A faceless plastic killer animated by the Nestene Consciousness.,You will be like us."
+      "Zygon,60,90,35,2,6,50,70,90,80,Rusty Knife,Bullwhip,Chaser,,FALSE,A shape-changing reptilian infiltrator from the lost world of Zygor.,This world can be ours."
+      "Judoon,90,74,25,3,8,40,110,100,90,Batleath,Revolver,Bruiser,,FALSE,A rhinoceros-headed space police trooper in heavy armor.,Judoon platoon upon the moon."
+      "Sea Devil,60,86,30,2,6,70,60,85,85,Rusty Knife,Revolver,Chaser,,FALSE,An amphibious reptile warrior risen from the oceans.,Return to the sea."
+      "Ogron,90,71,25,2,6,40,120,60,60,Batleath,,Bruiser,,FALSE,A brutal alien mercenary used as muscle by more cunning masters.,Grrr."
+      "Draconian,70,75,20,3,7,50,90,95,90,Lirpa,Revolver,Bruiser,,FALSE,A proud reptilian noble from the Draconian Empire.,Honor demands obedience."
+      "Weeping Angel,70,87,15,4,10,200,130,120,110,Light Saber,,Chaser,,FALSE,A quantum-locked predator that closes distance in impossible bursts.,Do not blink."
+      "Slitheen,100,72,15,4,9,40,140,70,75,Batleath,,Bruiser,,FALSE,A massive hunter wearing a stolen human disguise.,Feed me."
+      "Sycorax,80,88,20,3,7,50,100,95,85,Lirpa,Bullwhip,Bruiser,,FALSE,An axe-bearing scavenger warlord from the stars.,Blood control."
+      "Mire,110,77,12,5,10,40,150,100,90,Light Saber,Exterminator,Bruiser,,FALSE,A heavily armored war machine built for conquest.,You are beneath us."
+      "Macra,120,81,10,5,10,30,160,70,65,Batleath,,Bruiser,,FALSE,A giant crab-like horror lurking in the dark passages.,There is no such thing as Macra."
+      "Silence,70,78,18,4,9,80,80,110,95,Rusty Knife,Revolver,Sniper,,FALSE,A suit-clad confessional predator you forget the instant you look away.,Silence will fall."
+      "Master,10000,70,1,8,88,25,70,100,150,Light Saber,Sonic Grenade,Bruiser,,TRUE,The Master," ]
+
+let private defaultWeaponRows =
+    [ "Name,Range,Damage,Ammo"
+      "Rusty Knife,1,10,"
+      "Rusty Raygun,8,20,40"
+      "Revolver,4,10,80"
+      "Sonic Grenade,3,50,4"
+      "Exterminator,6,30,100"
+      "Light Saber,1,30,"
+      "Lirpa,1,30,"
+      "Batleath,1,30,"
+      "Bullwhip,2,20,40" ]
+
 let private options =
     let settings = JsonSerializerOptions(PropertyNameCaseInsensitive = true)
     settings.ReadCommentHandling <- JsonCommentHandling.Skip
@@ -88,15 +151,15 @@ let private loadSettings () : AppSettings =
     let path = Path.Combine(AppContext.BaseDirectory, "appsettings.json")
 
     if not (File.Exists path) then
-        invalidOp $"Missing configuration file: {path}"
-
-    let json = File.ReadAllText path
-    let loaded: AppSettings = JsonSerializer.Deserialize<AppSettings>(json, options)
-
-    if obj.ReferenceEquals(loaded, null) then
-        invalidOp $"Invalid configuration file: {path}"
+        defaultSettings
     else
-        loaded
+        let json = File.ReadAllText path
+        let loaded: AppSettings = JsonSerializer.Deserialize<AppSettings>(json, options)
+
+        if obj.ReferenceEquals(loaded, null) then
+            invalidOp $"Invalid configuration file: {path}"
+        else
+            loaded
 
 let private loadedSettings : Lazy<AppSettings> = lazy (loadSettings ())
 
@@ -155,12 +218,11 @@ let private parseMonsterCsvLine (line: string) : MonsterTemplate =
 let private loadMonsters () : MonsterTemplate list =
     let path = Path.Combine(AppContext.BaseDirectory, "Data", "Monsters.csv")
 
-    if not (File.Exists path) then
-        invalidOp $"Missing monster data file: {path}"
-
     let lines =
-        File.ReadAllLines path
-        |> Array.toList
+        if File.Exists path then
+            File.ReadAllLines path |> Array.toList
+        else
+            defaultMonsterRows
         |> List.map (fun line -> line.Trim())
         |> List.filter (fun line -> line <> "" && not (line.StartsWith("#")))
 
@@ -203,12 +265,11 @@ let private parseWeaponCsvLine (line: string) : WeaponTemplate =
 let private loadWeapons () : WeaponTemplate list =
     let path = Path.Combine(AppContext.BaseDirectory, "Data", "Weapons.csv")
 
-    if not (File.Exists path) then
-        invalidOp $"Missing weapon data file: {path}"
-
     let lines =
-        File.ReadAllLines path
-        |> Array.toList
+        if File.Exists path then
+            File.ReadAllLines path |> Array.toList
+        else
+            defaultWeaponRows
         |> List.map (fun line -> line.Trim())
         |> List.filter (fun line -> line <> "" && not (line.StartsWith("#")))
 
@@ -276,28 +337,11 @@ let spawnSettings () : SpawnSettings =
 let speechSettings () : SpeechSettings =
     (appSettings ()).Speech
 
-let private fontSizeFromString settingName (value: string) : IFont.Sizes =
-    match value.Trim().ToLowerInvariant() with
-    | "quarter" -> IFont.Sizes.Quarter
-    | "half" -> IFont.Sizes.Half
-    | "one" -> IFont.Sizes.One
-    | "two" -> IFont.Sizes.Two
-    | "three" -> IFont.Sizes.Three
-    | "four" -> IFont.Sizes.Four
-    | value -> invalidOp $"Unsupported Window:{settingName} value '{value}'."
-
-let private configuredFontSize settingName configured =
+let configuredFontSizeName configured =
     let window = windowSettings ()
 
     configured
     |> Option.defaultValue window.DefaultFontSize
-    |> fontSizeFromString settingName
-
-let defaultFontSize () : IFont.Sizes =
-    configuredFontSize "TextFontSize" (windowSettings ()).TextFontSize
-
-let tileFontSize () : IFont.Sizes =
-    configuredFontSize "TileFontSize" (windowSettings ()).TileFontSize
 
 let monsterTemplates () : MonsterTemplate list =
     loadedMonsters.Value

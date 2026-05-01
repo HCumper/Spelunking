@@ -22,6 +22,16 @@ let private configureFont (builder: Builder) =
     | None ->
         builder.ConfigureFonts(true)
 
+let private desktopFontSize settingName (value: string) : IFont.Sizes =
+    match value.Trim().ToLowerInvariant() with
+    | "quarter" -> IFont.Sizes.Quarter
+    | "half" -> IFont.Sizes.Half
+    | "one" -> IFont.Sizes.One
+    | "two" -> IFont.Sizes.Two
+    | "three" -> IFont.Sizes.Three
+    | "four" -> IFont.Sizes.Four
+    | value -> invalidOp $"Unsupported Window:{settingName} value '{value}'."
+
 let private tileFont (host: GameHost) : (IFont * IFont.Sizes) option =
     match tileFontPath () with
     | Some path ->
@@ -29,7 +39,7 @@ let private tileFont (host: GameHost) : (IFont * IFont.Sizes) option =
 
         host.Fonts.Values
         |> Seq.tryFind (fun font -> font.Name = expectedName)
-        |> Option.map (fun font -> font, tileFontSize ())
+        |> Option.map (fun font -> font, desktopFontSize "TileFontSize" (configuredFontSizeName (windowSettings ()).TileFontSize))
     | None -> None
 
 [<EntryPoint>]
@@ -54,6 +64,6 @@ let main _ =
 
     let configuredBuilder = configureFont builder
 
-    configuredBuilder.SetDefaultFontSize(defaultFontSize ()).Run()
+    configuredBuilder.SetDefaultFontSize(desktopFontSize "TextFontSize" (configuredFontSizeName (windowSettings ()).TextFontSize)).Run()
 
     0
