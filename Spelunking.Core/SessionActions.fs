@@ -325,7 +325,7 @@ let applyIntent services intent session : Transition =
                 { session with Modal = TimeShiftPrompt nextText }, []
             | TimeShiftPrompt turnsText, Confirm ->
                 match Int32.TryParse turnsText with
-                | true, turns when turns >= 1 ->
+                | true, turns when turns >= 1 && turns <= 10 ->
                     SessionHistory.rewindSession turns session, [] 
                 | _ ->
                     { session with

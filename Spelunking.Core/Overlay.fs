@@ -3,6 +3,7 @@ module Spelunk.Overlay
 
 open Spelunk.Model
 open Spelunk.Application
+open Spelunk.SessionHistory
 
 type OverlayColor =
     | Default
@@ -127,7 +128,7 @@ let overlayViewModel session =
                       Title = "TIME SHIFTER"
                       Lines =
                         [ sprintf "Turns to rewind (1-10): %s" (if turnsText = "" then "_" else turnsText)
-                          sprintf "Available: %d" (min 10 session.History.Length)
+                          sprintf "Available: %d" (min 10 (availableRewindTurns session))
                           "Type digits, Enter confirms, Esc closes." ] } }
     | QuitConfirm ->
         Some

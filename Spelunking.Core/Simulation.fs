@@ -415,7 +415,7 @@ let runMonsterTurnDetailed state =
             currentState, notes, projectilePaths)
     |> fun (nextState, notes, projectilePaths) ->
         { State = nextState
-          Notes = List.rev notes
+          Notes = notes
           ProjectilePaths = projectilePaths }
 
 let runMonsterTurn state =

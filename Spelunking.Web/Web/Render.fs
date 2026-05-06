@@ -10,23 +10,6 @@ open Spelunking.Web.App
 let private viewportWidth = 72
 let private viewportHeight = 30
 
-let private clamp lower upper value =
-    max lower (min upper value)
-
-let private focusPosition session =
-    match session.Modal with
-    | LookMode cursor
-    | TargetMode cursor -> cursor
-    | _ -> session.State.Player.Position
-
-let private cameraFor session =
-    let focus = focusPosition session
-    let maxX = max 0 (session.State.Map.Width - viewportWidth)
-    let maxY = max 0 (session.State.Map.Height - viewportHeight)
-
-    { X = focus.X - viewportWidth / 2 |> clamp 0 maxX
-      Y = focus.Y - viewportHeight / 2 |> clamp 0 maxY }
-
 let private glyphFromCode glyph =
     if glyph >= 32 && glyph <= 126 then
         string (char glyph)
@@ -126,7 +109,7 @@ let private overlayPanelView overlay =
 let view model dispatch =
     let session = model.Session
     let state = session.State
-    let camera = cameraFor session
+    let camera = model.Camera
     let overlay = overlayViewModel session
 
     div {

@@ -7,6 +7,7 @@ open Spelunk.Application
 open Spelunk.Combat
 open Spelunk.Config
 open Spelunk.Model
+open Spelunk.Overlay
 open Spelunk.Output
 open Spelunk.Services
 open Spelunk.SessionActions
@@ -282,6 +283,120 @@ let ``rewindSession restores the requested earlier state`` () =
     rewound.Modal |> should equal NoModal
 
 [<Fact>]
+let ``rewindSession refuses to undo a regeneration`` () =
+    let current =
+        { state 3 3 with
+            TurnCount = 10
+            Player =
+                { (state 3 3).Player with
+                    Incarnation = 1
+                    RegenerationsRemaining = 11
+                    Glyph = playerGlyphForIncarnation 1 }
+            Messages = [ "Regenerated" ] }
+
+    let beforeRegeneration =
+        { current with
+            TurnCount = 9
+            Player =
+                { current.Player with
+                    Incarnation = 0
+                    RegenerationsRemaining = 12
+                    Glyph = playerGlyphForIncarnation 0 }
+            Messages = [ "Before regeneration" ] }
+
+    let rewound =
+        { State = current
+          Modal = TimeShiftPrompt "1"
+          History = [ beforeRegeneration ] }
+        |> rewindSession 1
+
+    rewound.State.TurnCount |> should equal 10
+    rewound.State.Player.Incarnation |> should equal 1
+    rewound.State.Messages.Head |> should equal "The time shifter cannot reach before your regeneration."
+    rewound.State.Messages[1] |> should equal "The shift is limited to the lifetime of this regeneration."
+    rewound.History.Length |> should equal 1
+    rewound.Modal |> should equal NoModal
+
+[<Fact>]
+let ``rewindSession clamps to states after the latest regeneration`` () =
+    let current =
+        { state 3 3 with
+            TurnCount = 10
+            Player =
+                { (state 3 3).Player with
+                    Incarnation = 1
+                    RegenerationsRemaining = 11
+                    Glyph = playerGlyphForIncarnation 1 }
+            Messages = [ "Current" ] }
+
+    let afterRegeneration =
+        { current with
+            TurnCount = 9
+            Messages = [ "After regeneration" ] }
+
+    let beforeRegeneration =
+        { current with
+            TurnCount = 8
+            Player =
+                { current.Player with
+                    Incarnation = 0
+                    RegenerationsRemaining = 12
+                    Glyph = playerGlyphForIncarnation 0 }
+            Messages = [ "Before regeneration" ] }
+
+    let rewound =
+        { State = current
+          Modal = TimeShiftPrompt "2"
+          History = [ afterRegeneration; beforeRegeneration ] }
+        |> rewindSession 2
+
+    rewound.State.TurnCount |> should equal 9
+    rewound.State.Player.Incarnation |> should equal 1
+    rewound.State.Messages.Head |> should equal "The time shifter drags you back 1 turn."
+    rewound.State.Messages[1] |> should equal "The shift is limited to the lifetime of this regeneration."
+    rewound.History.Length |> should equal 1
+    rewound.Modal |> should equal NoModal
+
+[<Fact>]
+let ``time shifter overlay reports only rewindable turns after regeneration`` () =
+    let current =
+        { state 3 3 with
+            TurnCount = 10
+            Player =
+                { (state 3 3).Player with
+                    Incarnation = 1
+                    RegenerationsRemaining = 11
+                    Glyph = playerGlyphForIncarnation 1 } }
+
+    let afterRegeneration =
+        { current with
+            TurnCount = 9 }
+
+    let beforeRegeneration =
+        { current with
+            TurnCount = 8
+            Player =
+                { current.Player with
+                    Incarnation = 0
+                    RegenerationsRemaining = 12
+                    Glyph = playerGlyphForIncarnation 0 } }
+
+    let promptSession =
+        { State = current
+          Modal = TimeShiftPrompt ""
+          History = [ afterRegeneration; beforeRegeneration ] }
+
+    let availableLine =
+        match overlayViewModel promptSession with
+        | Some { Panel = Some panel } ->
+            panel.Lines
+            |> List.find (fun line -> line.StartsWith("Available:"))
+        | _ ->
+            failwith "Expected time shifter overlay."
+
+    availableLine |> should equal "Available: 1"
+
+[<Fact>]
 let ``computeVisibility blocks line of sight through walls and retains explored tiles`` () =
     let dungeon = map 5 3 Floor
     dungeon.Tiles[1, 2] <- Wall
@@ -537,6 +652,20 @@ let ``monster speed fifty acts every other turn`` () =
     afterTwoTurns.Player.Hp |> should equal 90
 
 [<Fact>]
+let ``monster turn notes follow acting order`` () =
+    let dalek = actor 1 "Dalek" 0 1 50 50 100 100 0 'D'
+    let cyberman = actor 2 "Cyberman" 2 1 50 50 100 100 0 'C'
+
+    let game =
+        { state 4 3 with
+            Player = actor 0 "scavenger" 1 1 100 100 100 100 0 '@'
+            Monsters = [ dalek; cyberman ] }
+
+    let result = runMonsterTurnDetailed game
+
+    result.Notes |> should equal [ "The Dalek hits you."; "The Cyberman hits you." ]
+
+[<Fact>]
 let ``save game failure reports an error message`` () =
     let transition = applyIntent failingSaveServices SaveGame (session (state 3 3))
 
@@ -698,3 +827,23 @@ let ``time shifter prompt edits digits and cancel closes it`` () =
     afterTwo.Modal |> should equal (TimeShiftPrompt "12")
     afterErase.Modal |> should equal (TimeShiftPrompt "1")
     afterCancel.Modal |> should equal NoModal
+
+[<Fact>]
+let ``time shifter prompt rejects turn counts above ten`` () =
+    let current = { state 3 3 with TurnCount = 10; Messages = [ "Current" ] }
+    let prior = { current with TurnCount = 9; Messages = [ "Prior" ] }
+
+    let promptSession =
+        { State = current
+          Modal = TimeShiftPrompt "11"
+          History = [ prior ] }
+
+    let transition = applyIntent inertServices Confirm promptSession
+
+    match transition.NextSession with
+    | Some nextSession ->
+        nextSession.State.TurnCount |> should equal 10
+        nextSession.State.Messages.Head |> should equal "Enter a turn count from 1 to 10."
+        nextSession.Modal |> should equal NoModal
+    | None ->
+        failwith "Time shifter should not exit the game."
