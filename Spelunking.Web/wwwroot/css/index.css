@@ -67,7 +67,7 @@ body {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) 92px;
+  grid-template-rows: minmax(0, 1fr) minmax(126px, auto);
   gap: 10px;
 }
 
@@ -195,20 +195,26 @@ body {
 }
 
 .message-log {
-  height: 92px;
+  min-height: 126px;
+  max-height: 22vh;
   border: 1px solid #34362d;
   background: #0d0e0c;
-  padding: 8px 10px;
+  padding: 10px 14px 14px;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   color: #c4c0ad;
   font-family: Consolas, "Courier New", monospace;
   font-size: 14px;
-  line-height: 18px;
+  line-height: 20px;
 }
 
 .message-log p {
-  margin: 2px 0;
+  margin: 0 0 4px;
+}
+
+.message-log p:last-child {
+  margin-bottom: 0;
 }
 
 .message-log .danger {

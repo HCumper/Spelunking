@@ -178,7 +178,7 @@ let view model dispatch =
             div {
                 attr.``class`` "message-log"
 
-                for message in state.Messages |> List.truncate 4 |> List.rev do
+                for message in state.Messages |> List.truncate 5 |> List.rev do
                     p { message }
 
                 if state.Player.Hp <= 0 then
