@@ -1,0 +1,18 @@
+/* /MyApp.bolero.rz.scp.css */
+#counter[b-adqhow6a85] {
+  width: 80px;
+}
+
+#notification-area[b-adqhow6a85] {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+
+#notification-area > div[b-adqhow6a85] {
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+  margin-bottom: 5px;
+}
